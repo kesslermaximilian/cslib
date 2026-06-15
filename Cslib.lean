@@ -1,4 +1,4 @@
-module  -- shake: keep-all
+module  -- shake: keep-all --deprecated_module: ignore
 
 public import Cslib.Algorithms.Lean.MergeSort.MergeSort
 public import Cslib.Algorithms.Lean.TimeM
@@ -22,10 +22,13 @@ public import Cslib.Computability.Automata.NA.Prod
 public import Cslib.Computability.Automata.NA.Sum
 public import Cslib.Computability.Automata.NA.ToDA
 public import Cslib.Computability.Automata.NA.Total
+public import Cslib.Computability.Distributed.FLP.Algorithm
+public import Cslib.Computability.Distributed.FLP.Consensus
 public import Cslib.Computability.Languages.Congruences.BuchiCongruence
 public import Cslib.Computability.Languages.Congruences.RightCongruence
 public import Cslib.Computability.Languages.ExampleEventuallyZero
 public import Cslib.Computability.Languages.Language
+public import Cslib.Computability.Languages.MyhillNerode
 public import Cslib.Computability.Languages.OmegaLanguage
 public import Cslib.Computability.Languages.OmegaRegularLanguage
 public import Cslib.Computability.Languages.RegularLanguage
@@ -62,13 +65,18 @@ public import Cslib.Foundations.Data.OmegaSequence.Flatten
 public import Cslib.Foundations.Data.OmegaSequence.InfOcc
 public import Cslib.Foundations.Data.OmegaSequence.Init
 public import Cslib.Foundations.Data.OmegaSequence.Temporal
+public import Cslib.Foundations.Data.PFunctor.Free
 public import Cslib.Foundations.Data.RelatesInSteps
-public import Cslib.Foundations.Data.Relation
 public import Cslib.Foundations.Data.Set.Saturation
 public import Cslib.Foundations.Data.StackTape
 public import Cslib.Foundations.Lint.Basic
 public import Cslib.Foundations.Logic.InferenceSystem
 public import Cslib.Foundations.Logic.LogicalEquivalence
+public import Cslib.Foundations.Relation.Attr
+public import Cslib.Foundations.Relation.Confluence
+public import Cslib.Foundations.Relation.Defs
+public import Cslib.Foundations.Relation.Domain
+public import Cslib.Foundations.Relation.Euclidean
 public import Cslib.Foundations.Semantics.FLTS.Basic
 public import Cslib.Foundations.Semantics.FLTS.FLTSToLTS
 public import Cslib.Foundations.Semantics.FLTS.LTSToFLTS
@@ -117,6 +125,7 @@ public import Cslib.Languages.LambdaCalculus.LocallyNameless.Untyped.Basic
 public import Cslib.Languages.LambdaCalculus.LocallyNameless.Untyped.Congruence
 public import Cslib.Languages.LambdaCalculus.LocallyNameless.Untyped.FullBeta
 public import Cslib.Languages.LambdaCalculus.LocallyNameless.Untyped.FullBetaConfluence
+public import Cslib.Languages.LambdaCalculus.LocallyNameless.Untyped.FullBetaEta
 public import Cslib.Languages.LambdaCalculus.LocallyNameless.Untyped.FullBetaEtaConfluence
 public import Cslib.Languages.LambdaCalculus.LocallyNameless.Untyped.FullEta
 public import Cslib.Languages.LambdaCalculus.LocallyNameless.Untyped.FullEtaConfluence
@@ -136,7 +145,10 @@ public import Cslib.Logics.LinearLogic.CLL.PhaseSemantics.Basic
 public import Cslib.Logics.Modal.Basic
 public import Cslib.Logics.Modal.Cube
 public import Cslib.Logics.Modal.Denotation
+public import Cslib.Logics.Modal.LogicalEquivalence
 public import Cslib.Logics.Propositional.Defs
 public import Cslib.Logics.Propositional.NaturalDeduction.Basic
 public import Cslib.MachineLearning.PACLearning.Defs
+public import Cslib.MachineLearning.PACLearning.VCDimension
+public import Cslib.MachineLearning.PACLearning.VersionSpace
 public import Cslib.Probability.PMF
