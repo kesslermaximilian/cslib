@@ -171,6 +171,19 @@ lemma haltCfg_extractOutput (tm : SingleTapeTM Symbol) (s : List Symbol) :
     extractOutput (haltCfg tm s) = s := by
   simp [haltCfg, extractOutput, mk₁_extract]
 
+lemma haltCfg_of_extractOutput {tm : SingleTapeTM Symbol} {s : List Symbol} {c : tm.Cfg} :
+    extractOutput c = s → c = tm.haltCfg s := by
+  unfold extractOutput
+  grind
+
+@[simp]
+lemma haltCfg_state (tm : SingleTapeTM Symbol) (s : List Symbol) :
+    (haltCfg tm s).state = none := rfl
+
+@[simp]
+lemma haltCfg_BiTape (tm : SingleTapeTM Symbol) (s : List Symbol) :
+    (haltCfg tm s).BiTape = BiTape.mk₁ s := rfl
+
 /--
 The space used by a configuration is the space used by its tape.
 -/
@@ -209,6 +222,9 @@ which maps a configuration to its next configuration, if it exists.
 -/
 @[scoped grind =]
 def TransitionRelation (tm : SingleTapeTM Symbol) (c₁ c₂ : tm.Cfg) : Prop := tm.step c₁ = some c₂
+
+lemma TransitionRelation.eq_lambda (tm : SingleTapeTM Symbol) :
+  tm.TransitionRelation = fun c₁ c₂ => tm.step c₁ = some c₂ := rfl
 
 section
 open Computation

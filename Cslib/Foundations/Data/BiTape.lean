@@ -162,6 +162,45 @@ lemma spaceUsed_move (t : BiTape Symbol) (d : Dir) :
   cases d <;> grind [moveLeft, moveRight, move,
     spaceUsed, StackTape.length_tail_le, StackTape.length_cons_le]
 
+
+section Nth
+
+/-- The `nth` function of a tape is integer-valued, with index `0` being the head, negative indexes
+on the left and positive indexes on the right. (Picture a number line.) -/
+def nth (T : BiTape Symbol) : ℤ → Option Symbol
+  | 0 => T.head
+  | (n + 1 : ℕ) => T.right.nth n
+  | -(n + 1 : ℕ) => T.left.nth n
+
+@[ext]
+/- Two BiTapes are equal if their `n`th tape symbol is equal for all `n ∈ ℤ`. -/
+theorem ext_nth (T₁ T₂ : BiTape Symbol) :
+    (∀ n, T₁.nth n = T₂.nth n) → T₁ = T₂ := by
+  intro h
+  rw [BiTape.mk.injEq]
+  refine ⟨h 0, ?_, ?_⟩
+  <;> apply StackTape.ext_nth
+  <;> intro n
+  · exact h (-(n + 1))
+  · exact h (n + 1)
+
+/-- The BiTape `T` only contains `none` symbols outside of the support set `S`. -/
+def IsSupportedBy (T : BiTape Symbol) (S : Set ℤ) : Prop :=
+  ∀ n ∉ S, T.nth n = default
+
+/- Two BiTapes are equal if their `n`th tape symbols agree on a support set. -/
+theorem ext_nth_SupportedBy {T₁ T₂ : BiTape Symbol} {S : Set ℤ} (h₁ : T₁.IsSupportedBy S)
+    (h₂ : T₂.IsSupportedBy S) :
+    (∀ n ∈ S, T₁.nth n = T₂.nth n) → T₁ = T₂ := by
+  intro h
+  apply ext_nth
+  intro n
+  by_cases hn : n ∈ S
+  · exact h n hn
+  · rw [h₁ n hn, h₂ n hn]
+
+end Nth
+
 end BiTape
 
 end Turing

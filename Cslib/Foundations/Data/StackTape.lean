@@ -176,6 +176,39 @@ lemma length_nil : (nil : StackTape Symbol).length = 0 := by grind
 
 end Length
 
+section Nth
+
+/-- The n-th element of a `StackTape` is well defined for all `n : ℕ` (unlike in a `List`),
+as the tape continues with an infinite number of `none`s. -/
+def nth (l : StackTape Symbol) (n : ℕ) : Option Symbol :=
+  Option.join l.toList[n]?
+
+@[simp]
+theorem nth_mapSome (l : List Symbol) (n : ℕ) :
+    (StackTape.mapSome l).nth n = l[n]? := by
+  grind [mapSome, nth]
+
+@[simp]
+theorem nth_zero (l : StackTape Symbol) :
+    l.nth 0 = l.head := by
+  grind [nth]
+
+@[simp]
+theorem nth_succ (l : StackTape Symbol) (n : ℕ) :
+    l.nth (n + 1) = l.tail.nth n := by
+  grind [nth]
+
+@[ext]
+theorem ext_nth (l₁ l₂ : StackTape Symbol) :
+    (∀ n, l₁.nth n = l₂.nth n) → l₁ = l₂ := by
+  intro h
+  unfold nth at h
+  rw [mk.injEq]
+  apply List.ext_getElem?
+  grind
+
+end Nth
+
 end StackTape
 
 end Turing

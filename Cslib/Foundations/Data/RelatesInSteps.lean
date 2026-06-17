@@ -8,6 +8,7 @@ module
 
 public import Cslib.Init
 public import Mathlib.Logic.Relation
+public import Mathlib.Logic.Function.Iterate
 
 /-! # Relations Across Steps
 
@@ -146,6 +147,21 @@ lemma RelatesInSteps.map {α α' : Type*}
   | refl => exact RelatesInSteps.refl (g _)
   | tail t' t'' m _ hstep ih =>
     exact .tail (g _) (g t') (g t'') m ih (hg t' t'' hstep)
+
+lemma RelatesInSteps.function_iff {α : Type*} {f : α → α} {a b : α} {n : ℕ} :
+    RelatesInSteps (fun a b => f a = b) a b n ↔ f^[n] a = b := by
+  induction n generalizing b with
+  | zero => simp
+  | succ n ih =>
+    simp [RelatesInSteps.succ_iff, ih, ← Function.iterate_succ_apply']
+
+lemma RelatesInSteps.function_Option_iff {α : Type*} {a b : α} {n : ℕ} (f : α → Option α) :
+    RelatesInSteps (fun a b => f a = some b) a b n ↔ (flip bind f)^[n] a = some b := by
+  induction n generalizing b with
+  | zero => simp
+  | succ n ih =>
+    simp_rw [RelatesInSteps.succ_iff, ih, ← Option.bind_eq_some_iff, Function.iterate_succ']
+    rfl
 
 /--
 `RelatesWithinSteps` is a variant of `RelatesInSteps` that allows for a loose bound.
