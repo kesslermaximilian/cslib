@@ -61,6 +61,11 @@ def stepN : tm.CfgN → tm.CfgN
     -- `n` is updated according to the direction of the Stmt
     | ⟨⟨wr, dir⟩, q''⟩ => ⟨⟨q'', (t.write wr).optionMove dir⟩, n + posChange dir⟩
 
+theorem step.compatible (c : CfgN tm) (h : c.state ≠ none) :
+    some (tm.stepN c).toCfg = step tm c.toCfg := by
+  simp [stepN, step]
+  grind
+
 theorem stepN.fixed (c : CfgN tm) (h : c.state = none) :
     tm.stepN c = c := by
   unfold stepN
@@ -72,19 +77,14 @@ theorem stepN.fixed_iterate_apply (c : CfgN tm) (n : ℕ) (h : c.state = none) :
   apply stepN.fixed
   assumption
 
-theorem step.compatible (c : CfgN tm) (h : c.state ≠ none) :
-    some (tm.stepN c).toCfg = step tm c.toCfg := by
-  simp [stepN, step]
-  grind
-
-theorem step.compatible_apply_iterate_aux (c : CfgN tm) (n : ℕ) :
-    some (tm.stepN^[n + 1] c).toCfg = (flip bind tm.step)^[n + 1] (some c.toCfg)
-    ∨ ((flip bind tm.step)^[n + 1] c.toCfg) = none ∧ (tm.stepN^[n] c).state = none := by
+theorem step.compatible_apply_iterate_aux (c : CfgN tm) (n : ℕ)
+    (hc : ((flip bind tm.step)^[n + 1] c.toCfg) ≠ none ∨ (tm.stepN^[n] c).state ≠ none) :
+    some (tm.stepN^[n + 1] c).toCfg = (flip bind tm.step)^[n + 1] (some c.toCfg) := by
+  revert hc
   induction n generalizing c with
   | zero =>
     by_cases h : c.state = none
-    · right
-      simp [h, flip, step.eq_none_iff]
+    · simp [h, flip, step.eq_none_iff]
     · simp [step.compatible _ _ h, flip]
   | succ n ih =>
     by_cases h : c.state = none
@@ -100,15 +100,14 @@ theorem step.compatible_apply_iterate (c : CfgN tm) (n : ℕ)
   cases n with
   | zero => rfl
   | succ n =>
-    -- TODO: Can we use priority so that simp uses h directly?
-    have := step.compatible_apply_iterate_aux tm c n
-    simp only [h] at this
-    simpa using this
+    apply step.compatible_apply_iterate_aux
+    exact Or.inl h
 
-theorem step.compatible_apply_iterate'' (c : CfgN tm) (n : ℕ)
+theorem step.compatible_apply_iterate' (c : CfgN tm) (n : ℕ)
     (h : (tm.stepN^[n] c).state ≠ none) :
     some (tm.stepN^[n + 1] c).toCfg = (flip bind tm.step)^[n + 1] (some c.toCfg) := by
-  simpa [h] using step.compatible_apply_iterate_aux tm c n
+  apply step.compatible_apply_iterate_aux
+  exact Or.inr h
 
 def runN (n : ℕ) (s : List Symbol) : CfgN tm :=
   (stepN tm)^[n] (initCfgN tm s)
@@ -120,7 +119,7 @@ lemma runN_zero (s : List Symbol) :
 def OutputsInTimeN (n : ℕ) (s s' : List Symbol) :=
   (runN tm n s).state = none ∧ extractOutput (runN tm n s).toCfg = s'
 
-theorem output_iff (s s' : List Symbol) (n : ℕ) :
+theorem output_iff_aux₁ (s s' : List Symbol) (n : ℕ) :
     Nonempty (OutputsInTime tm n s s') → OutputsInTimeN tm n s s' := by
   intro ⟨hout⟩
   -- Let `m ≤ n` be the number of execution steps
@@ -137,30 +136,30 @@ theorem output_iff (s s' : List Symbol) (n : ℕ) :
     rw [hn, Function.iterate_add_apply, stepN.fixed_iterate_apply _ _ k (by rw [hrm]; rfl), hrm]
   simp [OutputsInTimeN, runN, hrn]
 
-theorem output_foo (s s' : List Symbol) (n : ℕ) :
+theorem output_iff_aux₂ (s s' : List Symbol) (n : ℕ) :
     OutputsInTimeN tm n s s' → Nonempty (OutputsInTime tm n s s') := by
   intro ⟨hstop, hout⟩
   apply Nonempty.intro
   apply OutputsInTime.of_RelatesInSteps
   have hnone : ∃ m, (tm.runN m s).state = none := ⟨n, hstop⟩
-  have hle : Nat.find hnone ≤ n := by
-    apply Nat.find_min'
-    assumption'
+  have hle : Nat.find hnone ≤ n := Nat.find_min' _ hstop
   refine ⟨Nat.find hnone, hle, ?_⟩
   rw [TransitionRelation.eq_lambda, Relation.RelatesInSteps.function_Option_iff tm.step,
-    ← initCfg_compatible_apply,
-    ← step.compatible_apply_iterate]
+    ← initCfg_compatible_apply, ← step.compatible_apply_iterate]
   · obtain ⟨k, hn⟩ := Nat.exists_eq_add_of_le' hle
     rw [← stepN.fixed_iterate_apply tm (tm.stepN^[Nat.find hnone] (tm.initCfgN s)) k]
     · rw [← Function.iterate_add_apply, ← hn, ← runN, haltCfg_of_extractOutput hout]
     · exact Nat.find_spec hnone
   · have hne0 : Nat.find hnone ≠ 0 := by
-      have := Nat.find_spec hnone
-      contrapose this
-      simp [this, initCfgN]
-    rw [← Nat.succ_pred_eq_of_ne_zero hne0, ← step.compatible_apply_iterate'']
+      intro h
+      simpa [h, initCfgN] using Nat.find_spec hnone
+    rw [← Nat.succ_pred_eq_of_ne_zero hne0, ← step.compatible_apply_iterate']
     · apply Option.some_ne_none
     · exact (Nat.find_min hnone (Nat.sub_one_lt hne0))
+
+theorem output_ff (s s' : List Symbol) (n : ℕ) :
+    OutputsInTimeN tm n s s' ↔ Nonempty (OutputsInTime tm n s s') :=
+  ⟨output_iff_aux₂ _ _ _ _, output_iff_aux₁ _ _ _ _⟩
 
 end SingleTapeTM
 end Turing
