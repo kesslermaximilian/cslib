@@ -134,7 +134,7 @@ structure Cfg : Type where
 deriving Inhabited
 
 /-- The step function corresponding to a `SingleTapeTM`. -/
-@[simp]
+--@[simp]
 def step : tm.Cfg → Option tm.Cfg
   | ⟨none, _⟩ =>
     -- If in the halting state, there is no next configuration
@@ -146,12 +146,25 @@ def step : tm.Cfg → Option tm.Cfg
     -- and tape updated according to the Stmt
     | ⟨⟨wr, dir⟩, q''⟩ => some ⟨q'', (t.write wr).optionMove dir⟩
 
+lemma step.eq_none_iff (c : tm.Cfg) :
+    tm.step c = none ↔ c.state = none := by
+  unfold step
+  grind
+
 /--
 The initial configuration corresponding to a list in the input alphabet.
 Note that the entries of the tape constructed by `BiTape.mk₁` are all `some` values.
 This is to ensure that distinct lists map to distinct initial configurations.
 -/
 def initCfg (tm : SingleTapeTM Symbol) (s : List Symbol) : tm.Cfg := ⟨some tm.q₀, BiTape.mk₁ s⟩
+
+@[simp]
+lemma initCfg_state (tm : SingleTapeTM Symbol) (s : List Symbol) :
+    (tm.initCfg s).state = some tm.q₀ := rfl
+
+@[simp]
+lemma initCfg_BiTape (tm : SingleTapeTM Symbol) (s : List Symbol) :
+    (tm.initCfg s).BiTape = BiTape.mk₁ s := rfl
 
 /-- The final configuration corresponding to a list in the output alphabet.
 (We demand that the head halts at the leftmost position of the output.)
@@ -274,7 +287,7 @@ def OutputsInTime.of_RelatesInSteps {tm : SingleTapeTM Symbol} {l l' : List Symb
     OutputsInTime tm n l l' where
   haltState := tm.haltCfg l'
   haltState_halts := by
-    simp [haltCfg, TransitionRelation]
+    simp [haltCfg, TransitionRelation, step]
   output_eq := by simp
   evals_to := by
     simp [TransitionSystem.EvalsToInTime, h]

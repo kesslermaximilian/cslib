@@ -61,44 +61,61 @@ def stepN : tm.CfgN → tm.CfgN
     -- `n` is updated according to the direction of the Stmt
     | ⟨⟨wr, dir⟩, q''⟩ => ⟨⟨q'', (t.write wr).optionMove dir⟩, n + posChange dir⟩
 
-theorem step.compatible (c : CfgN tm) (h : c.state ≠ none) :
-    some (stepN tm c).toCfg = step tm c.toCfg := by
-  simp [stepN, step]
-  grind
-
-theorem step.compatible' (c : CfgN tm) (h : step tm c.toCfg ≠ none) :
-    some (stepN tm c).toCfg = step tm c.toCfg := by
-  apply step.compatible
-  unfold step at h
-  grind
-
-theorem step.compatible_apply_iterate (c : CfgN tm) (n : ℕ)
-    (h : ((flip Option.bind tm.step)^[n] c.toCfg) ≠ none) :
-    some (tm.stepN^[n] c).toCfg = (flip bind tm.step)^[n] c.toCfg := by
-  induction n generalizing c with
-  | zero => simp
-  | succ n ih =>
-    have hstep : tm.step c.toCfg ≠ none := by
-      contrapose h
-      rw [Function.iterate_succ_apply, flip, Option.bind_some, h, Function.iterate_fixed]
-      rfl
-    rw [Function.iterate_succ_apply, ih _ _, step.compatible' _ _ hstep]
-    · rfl
-    · rwa [step.compatible' _ _ hstep]
-
-theorem step.fixed (c : CfgN tm) (h : c.state = none) :
+theorem stepN.fixed (c : CfgN tm) (h : c.state = none) :
     tm.stepN c = c := by
   unfold stepN
   grind
 
-theorem step.fixed_iterate_apply (c : CfgN tm) (n : ℕ) (h : c.state = none) :
+theorem stepN.fixed_iterate_apply (c : CfgN tm) (n : ℕ) (h : c.state = none) :
     tm.stepN^[n] c = c := by
   apply Function.iterate_fixed
-  apply step.fixed
+  apply stepN.fixed
   assumption
+
+theorem step.compatible (c : CfgN tm) (h : c.state ≠ none) :
+    some (tm.stepN c).toCfg = step tm c.toCfg := by
+  simp [stepN, step]
+  grind
+
+theorem step.compatible_apply_iterate_aux (c : CfgN tm) (n : ℕ) :
+    some (tm.stepN^[n + 1] c).toCfg = (flip bind tm.step)^[n + 1] (some c.toCfg)
+    ∨ ((flip bind tm.step)^[n + 1] c.toCfg) = none ∧ (tm.stepN^[n] c).state = none := by
+  induction n generalizing c with
+  | zero =>
+    by_cases h : c.state = none
+    · right
+      simp [h, flip, step.eq_none_iff]
+    · simp [step.compatible _ _ h, flip]
+  | succ n ih =>
+    by_cases h : c.state = none
+    · simp [flip, (step.eq_none_iff _ c.toCfg).mpr h, Function.iterate_fixed,
+        stepN.fixed_iterate_apply _ _ _ h, h]
+    · repeat rw [Function.iterate_succ_apply _ _ (some c.toCfg)]
+      rw [flip, Option.bind_eq_bind, Option.bind_some, ← step.compatible _ _ h]
+      exact ih (tm.stepN c)
+
+theorem step.compatible_apply_iterate (c : CfgN tm) (n : ℕ)
+    (h : ((flip bind tm.step)^[n] c.toCfg) ≠ none) :
+    some (tm.stepN^[n] c).toCfg = (flip bind tm.step)^[n] c.toCfg := by
+  cases n with
+  | zero => rfl
+  | succ n =>
+    -- TODO: Can we use priority so that simp uses h directly?
+    have := step.compatible_apply_iterate_aux tm c n
+    simp only [h] at this
+    simpa using this
+
+theorem step.compatible_apply_iterate'' (c : CfgN tm) (n : ℕ)
+    (h : (tm.stepN^[n] c).state ≠ none) :
+    some (tm.stepN^[n + 1] c).toCfg = (flip bind tm.step)^[n + 1] (some c.toCfg) := by
+  simpa [h] using step.compatible_apply_iterate_aux tm c n
 
 def runN (n : ℕ) (s : List Symbol) : CfgN tm :=
   (stepN tm)^[n] (initCfgN tm s)
+
+@[simp]
+lemma runN_zero (s : List Symbol) :
+    tm.runN 0 s = tm.initCfgN s := rfl
 
 def OutputsInTimeN (n : ℕ) (s s' : List Symbol) :=
   (runN tm n s).state = none ∧ extractOutput (runN tm n s).toCfg = s'
@@ -114,10 +131,10 @@ theorem output_iff (s s' : List Symbol) (n : ℕ) :
       TransitionRelation.eq_lambda, Relation.RelatesInSteps.function_Option_iff tm.step,
       ← initCfg_compatible_apply, ← step.compatible_apply_iterate, Option.some_inj] at hr
     · assumption
-    · rw [← Option.bind_eq_bind, hr]
+    · rw [hr]
       apply Option.some_ne_none
   have hrn : (tm.stepN^[n] (tm.initCfgN s)).toCfg = tm.haltCfg s' := by
-    rw [hn, Function.iterate_add_apply, step.fixed_iterate_apply _ _ k (by rw [hrm]; rfl), hrm]
+    rw [hn, Function.iterate_add_apply, stepN.fixed_iterate_apply _ _ k (by rw [hrm]; rfl), hrm]
   simp [OutputsInTimeN, runN, hrn]
 
 theorem output_foo (s s' : List Symbol) (n : ℕ) :
@@ -134,10 +151,16 @@ theorem output_foo (s s' : List Symbol) (n : ℕ) :
     ← initCfg_compatible_apply,
     ← step.compatible_apply_iterate]
   · obtain ⟨k, hn⟩ := Nat.exists_eq_add_of_le' hle
-    rw [← step.fixed_iterate_apply tm (tm.stepN^[Nat.find hnone] (tm.initCfgN s)) k]
+    rw [← stepN.fixed_iterate_apply tm (tm.stepN^[Nat.find hnone] (tm.initCfgN s)) k]
     · rw [← Function.iterate_add_apply, ← hn, ← runN, haltCfg_of_extractOutput hout]
     · exact Nat.find_spec hnone
-  · sorry
+  · have hne0 : Nat.find hnone ≠ 0 := by
+      have := Nat.find_spec hnone
+      contrapose this
+      simp [this, initCfgN]
+    rw [← Nat.succ_pred_eq_of_ne_zero hne0, ← step.compatible_apply_iterate'']
+    · apply Option.some_ne_none
+    · exact (Nat.find_min hnone (Nat.sub_one_lt hne0))
 
 end SingleTapeTM
 end Turing
