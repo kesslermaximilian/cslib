@@ -323,9 +323,7 @@ lemma CNF.Clause.mem_map {α β : Type*} (v : α) (l : List β) (f : β → Lite
   grind
 
 attribute [local grind =] Int.mem_range_iff
---attribute [local simp] CNF.VarMem
 
-@[grind .]
 lemma innerTapeIndices_posChange (Q : ℕ) (n : ℤ) (h : n ∈ innerTapeIndices Q) (dir : Option Dir) :
     n + SingleTapeTM.posChange dir ∈ tapeIndices Q := by
   grind [SingleTapeTM.posChange_abs_bound dir]
@@ -340,11 +338,11 @@ lemma Mem_TMSAT₁ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIn
     · simp only [WellDefined, WellDefined₀, List.append_assoc, List.cons_append, List.nil_append,
         CNF.VarMem_flatten, List.mem_map, List.mem_range, Order.lt_add_one_iff,
         exists_exists_and_eq_and, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at h
-      obtain ⟨a, ha, ⟨f, ⟨h | h | h | h, heq⟩⟩⟩ := h
+      obtain ⟨_, _, ⟨_, ⟨h | h | h | h, heq⟩⟩⟩ := h
       · obtain ⟨n, hn, hfeq⟩ := h
         simp [← hfeq, CNF.VarMem, SymbolExists] at heq
         try grind
-      · obtain ⟨n, hn, hfeq⟩ := h
+      · obtain ⟨_, _, hfeq⟩ := h
         simp [← hfeq, CNF.VarMem, SymbolUnique] at heq
         try grind
       all_goals
@@ -353,7 +351,7 @@ lemma Mem_TMSAT₁ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIn
     · simp only [Propagate, Propagate₀, Propagate₁, CNF.VarMem_flatten, List.mem_map,
         List.mem_range, exists_exists_and_eq_and, CNF.VarMem_append, Prod.exists,
         List.pair_mem_product, ↓existsAndEq, and_true] at h
-      obtain ⟨a, ha, ⟨n, a, ⟨s, ⟨hnas, hmem | hmem⟩⟩⟩ | ⟨n, a, ⟨s, hnas, hmem⟩⟩⟩ := h
+      obtain ⟨_, _, ⟨_, _, ⟨_, ⟨_, hmem | hmem⟩⟩⟩ | ⟨n, a, ⟨s, hnas, hmem⟩⟩⟩ := h
       <;> simp [UpdateTape, KeepTape, UpdateState, CNF.VarMem] at hmem
       · grind
       · grind
