@@ -3,6 +3,8 @@ module
 public import Cslib.Computability.Machines.SingleTapeTuring.Basic
 public import Mathlib.Data.Nat.Find
 
+@[expose] public section
+
 namespace Turing
 namespace SingleTapeTM
 
@@ -48,6 +50,12 @@ def posChange : Option Dir → ℤ
   | some .left => -1
   | some .right => 1
   | none => 0
+
+lemma posChange_abs_bound (dir : Option Dir) : |posChange dir| ≤ 1 := by
+  match dir with
+  | none | some Dir.left | some Dir.right => simp [posChange]; try rfl
+
+
 
 def stepN : tm.CfgN → tm.CfgN
   | ⟨⟨none, t⟩, n⟩ =>
