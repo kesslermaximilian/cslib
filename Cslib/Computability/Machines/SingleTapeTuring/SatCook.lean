@@ -3,6 +3,7 @@ module
 public import Cslib.Computability.Machines.SingleTapeTuring.Basic
 public import Cslib.Computability.Machines.SingleTapeTuring.TMCook
 public import Mathlib.Data.Int.Range
+public import Mathlib.Tactic.Linarith
 public import Std.Sat.CNF
 
 
@@ -30,6 +31,20 @@ end Std.Sat
 
 namespace Turing
 
+-- Let us "fix" a finite alphabet `Symbol`
+variable {Symbol : Type} [Fintype Symbol]
+
+/--
+Extended transition function of a SingleTapeTM :
+We extend the domain to the halt state `Option tm.State` (instead of `tm.State`)
+by performing no writes/moves in this state and staying in the halt state.
+This is just a convenience function because it allows us more easily to model the extended
+execution behaviour of the TM in the SAT instance.
+-/
+def SingleTapeTM.tr' [Inhabited Symbol] (tm : SingleTapeTM Symbol) :
+    Option tm.State → Option Symbol → SingleTapeTM.Stmt Symbol × Option tm.State
+  | none, a => ({symbol := a, movement := none}, none)
+  | some s, a => tm.tr s a
 
 namespace Cook
 open Std.Sat
@@ -37,8 +52,6 @@ open Std.Sat
 
 -- We make arbitrary choices here to order the elements of the alphabet of Symbol
 noncomputable section
--- Let us "fix" a finite alphabet `Symbol`
-variable {Symbol : Type} [Fintype Symbol] --[DecidableEq Symbol]
 
 /- The tape alphabet of the verifier for a language on `Symbol`:
 - Contains a blank symbol (represented as `none`) for the tape
@@ -74,10 +87,11 @@ lemma symbols.complete (a : (Option (Option Symbol))) : a ∈ symbols := by
 variable (tm : SingleTapeTM (Option Symbol))
 
 /-- List of all states of the turing machine. -/
-def states : List tm.State := tm.stateFintype.elems.toList
+def states : List (Option tm.State) := none :: tm.stateFintype.elems.toList.map Option.some
 
-lemma states.complete (s : tm.State) : s ∈ states tm := by
-  simp [states, Fintype.complete]
+lemma states.complete (s : Option tm.State) : s ∈ states tm := by
+  cases s <;>
+    simp [states, Fintype.complete]
 
 /-- Returns the list of all pairs `(a, b)`, where `a, b ∈ l` and `a ≠ b` -/
 def NoneqPairs {α : Type*} [DecidableEq α] (l : List α) : List (α × α) :=
@@ -93,7 +107,7 @@ inductive VarIndex where
   /-- Encodes that at time `t`, at index `n`, the tape contains symbol `a` -/
   | tape  (t : ℕ) (n : ℤ) (a : Option (Option Symbol))
   /-- Encodes that at time `t`, the machine is in state `s` and reading index `n`
-    We use `one` to encode that the machine has halted and is no longer in a state
+    As usual, `none` represents the halting state.
    -/
   | state (t : ℕ) (n : ℤ) (s : Option tm.State)
 
@@ -143,7 +157,6 @@ def certificateIndices : List ℤ := Int.range (inst.length + 1) (inst.length + 
 def blankIndices : List ℤ := Int.range (-Q) 0 ++ Int.range (inst.length + C + 1) (Q + 1)
 
 
-
 /-- At time `t`, there is a symbol on tape position `n` -/
 def SymbolExists (t : ℕ) (n : ℤ) : CNF (VarIndex tm) :=
   ⟨⟨[
@@ -176,23 +189,26 @@ def StateUnique (t : ℕ) : CNF (VarIndex tm) where
 
 /-- When transitioning `t ↦ t + 1` and the machine is in state `s`,
   the state and r/w position is correctly updated (depending on the tape symbol) -/
-def UpdateState (t : ℕ) (n : ℤ) (a : (Option (Option Symbol))) (s : tm.State) : CNF (VarIndex tm) :=
-⟨⟨[[
-    (VarIndex.tape t n a, false),
-    (VarIndex.state t n s, false),
-    (VarIndex.state (t + 1) (n + posChange (tm.tr s a).fst.movement) (tm.tr s a).snd, true)
-  ]]⟩⟩
-
-/-- When transitioning `t ↦ t + 1`, the tape at the r/w head is correctly updated -/
-def UpdateTape (t : ℕ) (n : ℤ) (a : (Option (Option Symbol))) (s : tm.State) : CNF (VarIndex tm) :=
+def UpdateState (t : ℕ) (n : ℤ) (a : (Option (Option Symbol))) (s : Option tm.State) :
+    CNF (VarIndex tm) :=
   ⟨⟨[[
     (VarIndex.tape t n a, false),
     (VarIndex.state t n s, false),
-    (VarIndex.tape (t + 1) n (tm.tr s a).fst.symbol, true)
+    (VarIndex.state (t + 1) (n + posChange (tm.tr' s a).fst.movement) (tm.tr' s a).snd, true)
+  ]]⟩⟩
+
+/-- When transitioning `t ↦ t + 1`, the tape at the r/w head is correctly updated -/
+def UpdateTape (t : ℕ) (n : ℤ) (a : (Option (Option Symbol))) (s : Option tm.State) :
+    CNF (VarIndex tm) :=
+  ⟨⟨[[
+    (VarIndex.tape t n a, false),
+    (VarIndex.state t n s, false),
+    (VarIndex.tape (t + 1) n (tm.tr' s a).fst.symbol, true)
   ]]⟩⟩
 
 /-- When transitioning `t ↦ t + 1`, the tape *not* at the r/w head is left unchanged -/
-def KeepTape (t : ℕ) (n : ℤ) (a : (Option (Option (Symbol)))) (s : tm.State) : CNF (VarIndex tm) :=
+def KeepTape (t : ℕ) (n : ℤ) (a : (Option (Option (Symbol)))) (s : Option tm.State) :
+    CNF (VarIndex tm) :=
   ⟨⟨
   tapeIndices Q
     |> List.filter (fun n' => decide (n' ≠ n))
@@ -328,7 +344,7 @@ lemma innerTapeIndices_posChange (Q : ℕ) (n : ℤ) (h : n ∈ innerTapeIndices
     n + SingleTapeTM.posChange dir ∈ tapeIndices Q := by
   grind [SingleTapeTM.posChange_abs_bound dir]
 
-lemma Mem_TMSAT₁ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIndex tm)
+lemma Mem_TMSAT_aux₀ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIndex tm)
     (h : inst.length + 1 + C ≤ Q) [DecidableEq Symbol] [DecidableEq tm.State] :
     CNF.VarMem v (TMSAT tm Q C inst accept) → TMSAT.mem tm Q v := by
   cases v
@@ -355,12 +371,31 @@ lemma Mem_TMSAT₁ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIn
       <;> simp [UpdateTape, KeepTape, UpdateState, CNF.VarMem] at hmem
       · grind
       · grind
-      · grind [innerTapeIndices_posChange Q _ hnas.left.left (tm.tr s a).1.movement]
+      · grind [innerTapeIndices_posChange Q _ hnas.left.left (tm.tr' s a).1.movement]
     all_goals
       simp [InitState, InitInstance, InitSeparator, InitCertificate, InitBlank, Output,
         Output₀, Output₁] at h
       simp [CNF.VarMem] at h
       try grind
+
+lemma Mem_TMSAT_aux₁ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIndex tm)
+    [DecidableEq Symbol] [DecidableEq tm.State] :
+    TMSAT.mem tm Q v → CNF.VarMem v (TMSAT tm Q C inst accept) := by
+  unfold TMSAT.mem
+  cases v
+  all_goals
+    intro ⟨ht, hn⟩
+    simp only [TMSAT, CNF.VarMem_append, or_assoc, WellDefined, WellDefined₀, List.append_assoc,
+      List.cons_append, List.nil_append, CNF.VarMem_flatten, List.mem_map, List.mem_range,
+      Order.lt_add_one_iff, exists_exists_and_eq_and, List.mem_append, List.mem_cons,
+      List.not_mem_nil, or_false]
+    left
+  case state t _ _ =>
+    refine ⟨t, by linarith, StateExists tm Q t, ?_⟩
+    simp [StateExists, CNF.VarMem, states.complete, hn]
+  case tape t n _ =>
+    refine ⟨t, by linarith, SymbolExists tm t n, ?_⟩
+    simp [SymbolExists, CNF.VarMem, symbols.complete, hn]
 
 end
 end Cook
