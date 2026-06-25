@@ -397,6 +397,12 @@ lemma Mem_TMSAT_aux₁ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : V
     refine ⟨t, by linarith, SymbolExists tm t n, ?_⟩
     simp [SymbolExists, CNF.VarMem, symbols.complete, hn]
 
+theorem Mem_TMSAT (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIndex tm)
+    (h : inst.length + 1 + C ≤ Q) [DecidableEq Symbol] [DecidableEq tm.State] :
+    CNF.VarMem v (TMSAT tm Q C inst accept) ↔ TMSAT.mem tm Q v :=
+  ⟨Mem_TMSAT_aux₀ tm Q C inst accept v h, Mem_TMSAT_aux₁ tm Q C inst accept v⟩
+
+
 end
 end Cook
 end Turing
