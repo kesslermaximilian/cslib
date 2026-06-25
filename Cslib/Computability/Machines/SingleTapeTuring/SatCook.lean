@@ -333,10 +333,9 @@ lemma innerTapeIndices_posChange (Q : ℕ) (n : ℤ) (h : n ∈ innerTapeIndices
 lemma Mem_TMSAT₁ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIndex tm)
     (h : inst.length + 1 + C ≤ Q) [DecidableEq Symbol] [DecidableEq tm.State] :
     CNF.VarMem v (TMSAT tm Q C inst accept) → TMSAT.mem tm Q v := by
-  unfold TMSAT.mem
-  cases v with
-  | state t n s =>
-    simp only [TMSAT, Init, CNF.VarMem_append, or_assoc]
+  cases v
+  all_goals
+    simp only [TMSAT.mem, TMSAT, Init, CNF.VarMem_append, or_assoc]
     rintro (h | h | h | h | h | h | h | h)
     · simp only [WellDefined, WellDefined₀, List.append_assoc, List.cons_append, List.nil_append,
         CNF.VarMem_flatten, List.mem_map, List.mem_range, Order.lt_add_one_iff,
@@ -344,68 +343,26 @@ lemma Mem_TMSAT₁ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIn
       obtain ⟨a, ha, ⟨f, ⟨h | h | h | h, heq⟩⟩⟩ := h
       · obtain ⟨n, hn, hfeq⟩ := h
         simp [← hfeq, CNF.VarMem, SymbolExists] at heq
+        try grind
       · obtain ⟨n, hn, hfeq⟩ := h
         simp [← hfeq, CNF.VarMem, SymbolUnique] at heq
-      · simp [h, CNF.VarMem, StateExists] at heq
-        grind
-      · simp [h, CNF.VarMem, StateUnique] at heq
-        grind
+        try grind
+      all_goals
+        simp [h, CNF.VarMem, StateExists, StateUnique] at heq
+        try grind
     · simp only [Propagate, Propagate₀, Propagate₁, CNF.VarMem_flatten, List.mem_map,
         List.mem_range, exists_exists_and_eq_and, CNF.VarMem_append, Prod.exists,
         List.pair_mem_product, ↓existsAndEq, and_true] at h
       obtain ⟨a, ha, ⟨n, a, ⟨s, ⟨hnas, hmem | hmem⟩⟩⟩ | ⟨n, a, ⟨s, hnas, hmem⟩⟩⟩ := h
-      · simp [UpdateTape, CNF.VarMem] at hmem
-        grind
-      · simp [KeepTape, CNF.VarMem] at hmem
-        grind
-      · simp [UpdateState, CNF.VarMem] at hmem
-        grind [innerTapeIndices_posChange Q n hnas.left.left (tm.tr s a).1.movement]
-    · simp [InitState, CNF.VarMem] at h
-      grind
-    · simp [InitInstance, CNF.VarMem] at h
-    · simp [InitSeparator, CNF.VarMem] at h
-    · simp [InitCertificate, CNF.VarMem] at h
-    · simp [InitBlank, CNF.VarMem] at h
-    · simp [Output, Output₀, Output₁] at h
+      <;> simp [UpdateTape, KeepTape, UpdateState, CNF.VarMem] at hmem
+      · grind
+      · grind
+      · grind [innerTapeIndices_posChange Q _ hnas.left.left (tm.tr s a).1.movement]
+    all_goals
+      simp [InitState, InitInstance, InitSeparator, InitCertificate, InitBlank, Output,
+        Output₀, Output₁] at h
       simp [CNF.VarMem] at h
-      grind
-  | tape t n a =>
-    simp only [TMSAT, Init, CNF.VarMem_append, or_assoc]
-    rintro (h | h | h | h | h | h | h | h)
-    · simp only [WellDefined, WellDefined₀, List.append_assoc, List.cons_append, List.nil_append,
-        CNF.VarMem_flatten, List.mem_map, List.mem_range, Order.lt_add_one_iff,
-        exists_exists_and_eq_and, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at h
-      obtain ⟨a, ha, ⟨f, ⟨h | h | h | h, heq⟩⟩⟩ := h
-      · obtain ⟨n, hn, hfeq⟩ := h
-        simp [← hfeq, CNF.VarMem, SymbolExists] at heq
-        grind
-      · obtain ⟨n, hn, hfeq⟩ := h
-        simp [← hfeq, CNF.VarMem, SymbolUnique] at heq
-        grind
-      · simp [h, CNF.VarMem, StateExists] at heq
-      · simp [h, CNF.VarMem, StateUnique] at heq
-    · simp only [Propagate, Propagate₀, Propagate₁, CNF.VarMem_flatten, List.mem_map,
-        List.mem_range, exists_exists_and_eq_and, CNF.VarMem_append, Prod.exists,
-        List.pair_mem_product, ↓existsAndEq, and_true] at h
-      obtain ⟨a, ha, ⟨n, a, ⟨s, ⟨hnas, hmem | hmem⟩⟩⟩ | ⟨n, a, ⟨s, hnas, hmem⟩⟩⟩ := h
-      · simp [UpdateTape, CNF.VarMem] at hmem
-        grind
-      · simp [KeepTape, CNF.VarMem] at hmem
-        grind
-      · simp [UpdateState, CNF.VarMem] at hmem
-        grind [innerTapeIndices_posChange Q n hnas.left.left (tm.tr s a).1.movement]
-    · simp [InitState, CNF.VarMem] at h
-    · simp [InitInstance, CNF.VarMem] at h
-      grind
-    · simp [InitSeparator, CNF.VarMem] at h
-      grind
-    · simp [InitCertificate, CNF.VarMem] at h
-      grind
-    · simp [InitBlank, CNF.VarMem] at h
-      grind
-    · simp [Output, Output₀, Output₁] at h
-      simp [CNF.VarMem] at h
-      grind
+      try grind
 
 end
 end Cook
