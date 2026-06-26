@@ -11,6 +11,7 @@ public import Mathlib.Computability.TuringMachine.Tape
 public import Mathlib.Data.Finset.Attr
 public import Mathlib.Tactic.SetLike
 public import Mathlib.Algebra.Order.Group.Nat
+public import Mathlib.Tactic.NormNum
 
 /-!
 # BiTape: Bidirectionally infinite TM tape representation using StackTape
@@ -169,8 +170,8 @@ section Nth
 on the left and positive indexes on the right. (Picture a number line.) -/
 def nth (T : BiTape Symbol) : ℤ → Option Symbol
   | 0 => T.head
-  | (n + 1 : ℕ) => T.right.nth n
-  | -(n + 1 : ℕ) => T.left.nth n
+  | .ofNat (n + 1) => T.right.nth n
+  | .negSucc n => T.left.nth n
 
 @[ext]
 /- Two BiTapes are equal if their `n`th tape symbol is equal for all `n ∈ ℤ`. -/
@@ -183,6 +184,44 @@ theorem ext_nth (T₁ T₂ : BiTape Symbol) :
   <;> intro n
   · exact h (-(n + 1))
   · exact h (n + 1)
+
+lemma moveLeft_nth (T : BiTape Symbol) (n : ℤ) :
+    T.moveLeft.nth n = T.nth (n - 1) := by
+  match n with
+  | 0 =>
+    rw [moveLeft, ← StackTape.nth_zero]
+    rfl
+  | .ofNat (n + 1) =>
+    simp [nth, moveLeft]
+    cases n
+    <;> simp
+  | .negSucc n =>
+    simp [nth, moveLeft]
+
+lemma moveRight_nth (T : BiTape Symbol) (n : ℤ) :
+    T.moveRight.nth n = T.nth (n + 1) := by
+  conv_rhs =>
+    rw [← moveRight_moveLeft T, moveLeft_nth, add_sub_cancel_right]
+
+def posChange : Option Dir → ℤ
+  | some .left => -1
+  | some .right => 1
+  | none => 0
+
+lemma optionMove_nth (T : BiTape Symbol) (dir : Option Dir) (n : ℤ) :
+    (T.optionMove dir).nth n = T.nth (n + posChange dir) := by
+  match dir with
+  | none => simp [optionMove, posChange]
+  | some .left => simp [optionMove, move, moveLeft_nth, posChange, Int.add_neg_one]
+  | some .right => simp [optionMove, move, moveRight_nth, posChange]
+
+lemma write_nth (T : BiTape Symbol) (n : ℤ) (a : Option Symbol) :
+    (T.write a).nth n = if n = 0 then a else T.nth n := by
+  match n with
+  | 0 => rfl
+  | .ofNat (n + 1) => rfl
+  | .negSucc n => rfl
+
 
 /-- The BiTape `T` only contains `none` symbols outside of the support set `S`. -/
 def IsSupportedBy (T : BiTape Symbol) (S : Set ℤ) : Prop :=

@@ -2,6 +2,7 @@ module
 
 public import Cslib.Computability.Machines.SingleTapeTuring.Basic
 public import Mathlib.Data.Nat.Find
+public import Mathlib.Tactic.Ring
 
 @[expose] public section
 
@@ -31,31 +32,16 @@ That is, tape index `0` will always refer to the cell on the tape where the r/w 
 the head: The _tape index_ is invariant with respect to the r/w head moving. -/
 abbrev CfgN.nth (c : CfgN tm) (n : ℤ) : Option Symbol := c.BiTape.nth (n - c.n)
 
-variable {tm} in
-/-- The set `S` is a support of the state, i.e. all non-default tape indices lie in `S`
-  and the r/w head is in `S` as well.
-
-  **Warning** Note that this is slightly different than the notion `Tape.SupportedBy`,
-  since this talks about the _tape indices_, not necessarily the indices relative
-  to the current r/w head
--/
-def IsSupportedBy (c : CfgN tm) (S : Set ℤ) : Prop :=
-  c.n ∈ S ∧ ∀ n, n ∉ S → c.nth n = default
 
 def initCfgN (s : List Symbol) : tm.CfgN := ⟨initCfg tm s, 0⟩
 
 lemma initCfg_compatible_apply (s : List Symbol) :  (initCfgN tm s).toCfg = initCfg tm s := rfl
 
-def posChange : Option Dir → ℤ
-  | some .left => -1
-  | some .right => 1
-  | none => 0
+open BiTape
 
 lemma posChange_abs_bound (dir : Option Dir) : |posChange dir| ≤ 1 := by
   match dir with
   | none | some Dir.left | some Dir.right => simp [posChange]; try rfl
-
-
 
 def stepN : tm.CfgN → tm.CfgN
   | ⟨⟨none, t⟩, n⟩ =>
@@ -168,6 +154,99 @@ theorem output_iff_aux₂ (s s' : List Symbol) (n : ℕ) :
 theorem output_ff (s s' : List Symbol) (n : ℕ) :
     OutputsInTimeN tm n s s' ↔ Nonempty (OutputsInTime tm n s s') :=
   ⟨output_iff_aux₂ _ _ _ _, output_iff_aux₁ _ _ _ _⟩
+
+
+-- Properties of stepN
+section CfgN
+variable (c : CfgN tm)
+
+/--
+Extended transition function of a SingleTapeTM :
+We extend the domain to the halt state `Option tm.State` (instead of `tm.State`)
+by performing no writes/moves in this state and staying in the halt state.
+This is just a convenience function because it allows us more easily to model the extended
+execution behaviour of the TM in the SAT instance.
+-/
+def tr' (tm : SingleTapeTM Symbol) :
+    Option tm.State → Option Symbol → SingleTapeTM.Stmt Symbol × Option tm.State
+  | none, a => ({symbol := a, movement := none}, none)
+  | some s, a => tm.tr s a
+
+lemma stepN.state_update :
+    (stepN tm c).state = (tm.tr' c.state c.BiTape.head).snd := by
+  obtain ⟨⟨state, _⟩, _⟩ := c
+  cases state
+  <;> rfl
+
+lemma stepN.pos_update :
+    (stepN tm c).n = c.n + posChange (tm.tr' c.state c.BiTape.head).fst.movement := by
+  obtain ⟨⟨state, _⟩, _⟩ := c
+  cases state
+  · rw [stepN, left_eq_add]
+    rfl
+  · rfl
+
+lemma stepN.BiTape_update :
+    (stepN tm c).BiTape
+    = (c.BiTape.write (tm.tr' c.state c.BiTape.head).fst.symbol).optionMove
+        (tm.tr' c.state c.BiTape.head).fst.movement
+       := by
+  obtain ⟨⟨state, _⟩, _⟩ := c
+  cases state
+  <;> rfl
+
+lemma stepN.nth_udpate (n : ℤ) :
+    (stepN tm c).nth n =
+      if n = c.n
+      then (tm.tr' c.state c.BiTape.head).fst.symbol
+      else c.nth n := by
+  rw [CfgN.nth, stepN.BiTape_update, optionMove_nth, write_nth, stepN.pos_update]
+  ring_nf
+  simp_rw [CfgN.nth, Int.sub_eq_zero]
+
+end CfgN
+
+/-!
+
+# Support of CfgN
+As usual, the *support* of a `(c : CfgN)` is the set of indices `n` such that `c.nth n ≠ none`.
+Note that this refers to the *tape indices* (i.e. fixed tape positions wrt to the starting
+position), **not** to the tape cells relative to the current r/w head.
+
+We prove some lemmata about how the support set changes upon state transitions.
+
+-/
+
+variable {tm} in
+/-- The set `S` is a support of the state, i.e. all non-default tape indices lie in `S`
+  and the r/w head is in `S` as well.
+
+  **Warning** Note that this is slightly different than the notion `Tape.SupportedBy`,
+  since this talks about the _tape indices_, not necessarily the indices relative
+  to the current r/w head
+-/
+def IsSupportedBy (c : CfgN tm) (S : Set ℤ) : Prop :=
+  c.n ∈ S ∧ ∀ n, n ∉ S → c.nth n = default
+
+/-- `SupportedBy` is monotone -/
+lemma SupportedBy_of_subset {c : CfgN tm} {S S' : Set ℤ} (hS : S ⊆ S') :
+    IsSupportedBy c S → IsSupportedBy c S' := by
+  grind [IsSupportedBy]
+
+lemma SupportedBy_propagate_aux (c : CfgN tm) (n : ℤ) (h : IsSupportedBy c (Set.Icc (-n) n)) :
+    ∀ m ∉ Set.Icc (-n) n, (stepN tm c).nth m  = none := by
+  simp [stepN]
+
+  sorry
+
+lemma SupportedBy_propagate (c : CfgN tm) (n : ℤ) (h : IsSupportedBy c (Set.Icc (-n) n)) :
+    IsSupportedBy (stepN tm c) (Set.Icc (- (n+1)) (n+1)) := by
+  sorry
+
+lemma run_SupportedBy_le (tm : SingleTapeTM Symbol) (l : List Symbol) (t : ℕ) :
+    IsSupportedBy (runN tm t l) (Set.Icc (-(t)) (max t l.length)) := by
+  sorry
+
 
 end SingleTapeTM
 end Turing

@@ -25,29 +25,24 @@ lemma CNF.VarMem_flatten {α : Type*} (fs : List (CNF α)) (v : α) :
   | nil => simp [CNF.flatten]
   | cons f fs ih => simp [flatten, ih]
 
+@[simp]
+lemma CNF.eval_flatten {α : Type*} (fs : List (CNF α)) (a : α → Bool) :
+    CNF.eval a (CNF.flatten fs) = fs.all (fun f => CNF.eval a f) := by
+  induction fs with
+  | nil => simp [CNF.flatten]
+  | cons f fs ih => simp [CNF.flatten, ih]
+
 end Std.Sat
 
 
 
 namespace Turing
 
--- Let us "fix" a finite alphabet `Symbol`
-variable {Symbol : Type} [Fintype Symbol]
-
-/--
-Extended transition function of a SingleTapeTM :
-We extend the domain to the halt state `Option tm.State` (instead of `tm.State`)
-by performing no writes/moves in this state and staying in the halt state.
-This is just a convenience function because it allows us more easily to model the extended
-execution behaviour of the TM in the SAT instance.
--/
-def SingleTapeTM.tr' [Inhabited Symbol] (tm : SingleTapeTM Symbol) :
-    Option tm.State → Option Symbol → SingleTapeTM.Stmt Symbol × Option tm.State
-  | none, a => ({symbol := a, movement := none}, none)
-  | some s, a => tm.tr s a
-
 namespace Cook
 open Std.Sat
+open BiTape
+-- Let us "fix" a finite alphabet `Symbol`
+variable {Symbol : Type} [Fintype Symbol]
 
 
 -- We make arbitrary choices here to order the elements of the alphabet of Symbol
@@ -76,7 +71,7 @@ def inputSymbols : List (Option (Option Symbol)):= #₀ :: instanceSymbols
 /-- List of all symbols of the tape alphabet `Symbol' = Option (Option Symbol)` -/
 def symbols : List (Option (Option Symbol)) := ␣ :: inputSymbols
 
---@[simp]
+@[simp]
 lemma symbols.complete (a : (Option (Option Symbol))) : a ∈ symbols := by
   match a with
   | none => simp [symbols]
@@ -89,6 +84,7 @@ variable (tm : SingleTapeTM (Option Symbol))
 /-- List of all states of the turing machine. -/
 def states : List (Option tm.State) := none :: tm.stateFintype.elems.toList.map Option.some
 
+@[simp]
 lemma states.complete (s : Option tm.State) : s ∈ states tm := by
   cases s <;>
     simp [states, Fintype.complete]
@@ -303,8 +299,6 @@ def Propagate : CNF (VarIndex tm) :=
     |> List.map (fun t => Propagate₀ tm Q t ++ Propagate₁ tm Q t)
     |> CNF.flatten
 
-end Encoding
-open Encoding
 
 /-- The total SAT formulation of the execution of the verifier turing machine,
   assuming that
@@ -315,8 +309,7 @@ open Encoding
   - The r/w head is always in the range `[-Q, Q]`
   - The machine is expected to output `1`, i.e. there exists a certificate for `inst`
 -/
-def TMSAT (Q C : ℕ) (inst : List Symbol) (accept : Symbol)
-  [DecidableEq Symbol] [DecidableEq tm.State] : CNF (VarIndex tm) :=
+def TMSAT (Q C : ℕ) (inst : List Symbol) (accept : Symbol) : CNF (VarIndex tm) :=
   Encoding.WellDefined tm Q ++ Encoding.Propagate tm Q ++ Encoding.Init tm Q C inst
   ++ Encoding.Output tm Q accept
 
@@ -338,14 +331,15 @@ lemma CNF.Clause.mem_map {α β : Type*} (v : α) (l : List β) (f : β → Lite
   simp [CNF.Clause.Mem]
   grind
 
+section TMSAT_VarMem
 attribute [local grind =] Int.mem_range_iff
 
 lemma innerTapeIndices_posChange (Q : ℕ) (n : ℤ) (h : n ∈ innerTapeIndices Q) (dir : Option Dir) :
-    n + SingleTapeTM.posChange dir ∈ tapeIndices Q := by
+    n + posChange dir ∈ tapeIndices Q := by
   grind [SingleTapeTM.posChange_abs_bound dir]
 
 lemma Mem_TMSAT_aux₀ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIndex tm)
-    (h : inst.length + 1 + C ≤ Q) [DecidableEq Symbol] [DecidableEq tm.State] :
+    (h : inst.length + 1 + C ≤ Q) :
     CNF.VarMem v (TMSAT tm Q C inst accept) → TMSAT.mem tm Q v := by
   cases v
   all_goals
@@ -378,8 +372,7 @@ lemma Mem_TMSAT_aux₀ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : V
       simp [CNF.VarMem] at h
       try grind
 
-lemma Mem_TMSAT_aux₁ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIndex tm)
-    [DecidableEq Symbol] [DecidableEq tm.State] :
+lemma Mem_TMSAT_aux₁ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIndex tm) :
     TMSAT.mem tm Q v → CNF.VarMem v (TMSAT tm Q C inst accept) := by
   unfold TMSAT.mem
   cases v
@@ -397,11 +390,94 @@ lemma Mem_TMSAT_aux₁ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : V
     refine ⟨t, by linarith, SymbolExists tm t n, ?_⟩
     simp [SymbolExists, CNF.VarMem, symbols.complete, hn]
 
-theorem Mem_TMSAT (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIndex tm)
-    (h : inst.length + 1 + C ≤ Q) [DecidableEq Symbol] [DecidableEq tm.State] :
+theorem Mem_TMSAT (Q C : ℕ) (inst : List Symbol) (accept : Symbol)
+    (h : inst.length + 1 + C ≤ Q) (v : VarIndex tm) :
     CNF.VarMem v (TMSAT tm Q C inst accept) ↔ TMSAT.mem tm Q v :=
   ⟨Mem_TMSAT_aux₀ tm Q C inst accept v h, Mem_TMSAT_aux₁ tm Q C inst accept v⟩
 
+end TMSAT_VarMem
+end Encoding
+
+open Encoding
+variable {tm : SingleTapeTM (Option Symbol)}
+variable [DecidableEq Symbol] [DecidableEq tm.State]
+
+/-- An assignment `a` is *suitable*, if
+- It satisfies the system of clauses `WellDefined tm Q`. This means we can reconstruct states from
+the truth assignment
+- The state and tape variables never refer to tape indices outside of `tapeIndices Q`
+-/
+structure IsSuitable (a : VarIndex tm → Bool) (Q : ℕ) where
+  well_defined : CNF.Sat a (WellDefined tm Q)
+  state_normalized : ∀ n ∉ tapeIndices Q, ∀ t q, a (VarIndex.state t n q) = false
+  tape_normalized : ∀ n ∉ tapeIndices Q, ∀ t s, a (VarIndex.tape t n s) = true ↔ s = ␣
+  state_eventually_const : ∀ t > Q, ∀ n q, a (VarIndex.state t n q) = a (VarIndex.state Q n q)
+  tape_eventually_const : ∀ t > Q, ∀ n s, a (VarIndex.tape t n s) = a (VarIndex.tape Q n s)
+
+/-- Normalize a truth assignment by setting correct dummy values for variables not occurring in the
+`TMSAT`.
+- See `mkSuitable_TMSAT_iff` for a proof that this assignment is equivalent for TMSAT
+- See `mkSuitable_IsSuitable` for a proof that this yields a suitable assignment,
+  assuming that the `WellDefined` portion of the SAT is fullfilled
+-/
+def mkSuitable (a : VarIndex tm → Bool) (Q : ℕ) : VarIndex tm → Bool
+  | VarIndex.state t n q =>
+    if (tapeIndices Q).contains n then
+      a (VarIndex.state (min t Q) n q)
+      else false
+  | VarIndex.tape t n s =>
+    if (tapeIndices Q).contains n then
+      a (VarIndex.tape (min t Q) n s)
+      else s = ␣
+
+omit [DecidableEq Symbol] [DecidableEq tm.State] in
+lemma mkSuitable_Sat_iff (Q : ℕ) (a : VarIndex tm → Bool) (sat : CNF (VarIndex tm))
+    (hmem : ∀ v, CNF.VarMem v sat → TMSAT.mem tm Q v) :
+    CNF.Sat (mkSuitable a Q) sat ↔ CNF.Sat a sat := by
+  simp only [CNF.Sat, Bool.coe_iff_coe]
+  apply CNF.eval_congr
+  intro v hv
+  specialize hmem v hv
+  cases v
+  all_goals
+    dsimp only [TMSAT.mem] at hmem
+    simp [mkSuitable, hmem]
+
+@[simp]
+lemma mkSuitable_TMSAT_iff (a : VarIndex tm → Bool) (Q C : ℕ) (inst : List Symbol) (accept : Symbol)
+    (hQ : inst.length + 1 + C ≤ Q) :
+    CNF.Sat (mkSuitable a Q) (TMSAT tm Q C inst accept) ↔ CNF.Sat a (TMSAT tm Q C inst accept) := by
+  apply mkSuitable_Sat_iff
+  simp [Mem_TMSAT, hQ]
+
+lemma mkSuitable_IsSuitable (a : VarIndex tm → Bool) (Q C : ℕ) (inst : List Symbol)
+  (accept : Symbol) (ha : CNF.Sat a (WellDefined tm Q)) (hQ : inst.length + 1 + C ≤ Q) :
+    IsSuitable (mkSuitable a Q) Q where
+  well_defined := by
+    refine (mkSuitable_Sat_iff _ _ _ ?_).mpr ha
+    simp [← Mem_TMSAT _ _ _ _ accept hQ, TMSAT]
+    tauto
+  state_normalized n hn t q := by simp [mkSuitable, hn]
+  tape_normalized n hn t s := by simp [mkSuitable, hn]
+  state_eventually_const := by grind [mkSuitable]
+  tape_eventually_const := by grind [mkSuitable]
+
+def mkAssignment_aux (states : ℕ → SingleTapeTM.CfgN tm) :
+    VarIndex tm → Bool
+  | VarIndex.state t n q => (states t).n = n && (states t).state = q
+  | VarIndex.tape t n s => (states t).BiTape.nth (n - (states t).n) = s
+
+def mkAssignment (inst : List (Option Symbol)) :
+    VarIndex tm → Bool :=
+  mkAssignment_aux (fun t ↦ (tm.runN t inst))
+
+lemma mkAssignment_aux.well_defined (states : ℕ → SingleTapeTM.CfgN tm) (Q : ℕ)
+    (hs : ∀ t, (states t).n ∈ tapeIndices Q) :
+    CNF.Sat (mkAssignment_aux states) (WellDefined tm Q) := by
+  simp [WellDefined, CNF.sat_def, WellDefined₀]
+  simp [SymbolExists, SymbolUnique, StateExists, StateUnique, CNF.eval, CNF.Clause.eval,
+    mkAssignment_aux]
+  grind
 
 end
 end Cook
