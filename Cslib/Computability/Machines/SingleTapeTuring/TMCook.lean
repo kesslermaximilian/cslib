@@ -202,7 +202,17 @@ lemma stepN.nth_udpate (n : ℤ) :
       else c.nth n := by
   rw [CfgN.nth, stepN.BiTape_update, optionMove_nth, write_nth, stepN.pos_update]
   ring_nf
-  simp_rw [CfgN.nth, Int.sub_eq_zero]
+  simp [Int.sub_eq_zero]
+
+lemma stepN.pos_bound (c : CfgN tm) (n : ℕ) :
+    |c.n - ((tm.stepN)^[n] c).n| ≤ n := by
+  induction n generalizing c with
+  | zero => simp
+  | succ m ih =>
+      rw [Function.iterate_succ_apply', stepN.pos_update]
+      have := posChange_abs_bound
+      grind
+
 
 end CfgN
 
@@ -226,27 +236,43 @@ variable {tm} in
   to the current r/w head
 -/
 def IsSupportedBy (c : CfgN tm) (S : Set ℤ) : Prop :=
-  c.n ∈ S ∧ ∀ n, n ∉ S → c.nth n = default
+  c.n ∈ S ∧ ∀ n, n ∉ S → c.nth n = none
 
 /-- `SupportedBy` is monotone -/
-lemma SupportedBy_of_subset {c : CfgN tm} {S S' : Set ℤ} (hS : S ⊆ S') :
+lemma IsSupportedBy_of_subset {c : CfgN tm} {S S' : Set ℤ} (hS : S ⊆ S') :
     IsSupportedBy c S → IsSupportedBy c S' := by
   grind [IsSupportedBy]
 
-lemma SupportedBy_propagate_aux (c : CfgN tm) (n : ℤ) (h : IsSupportedBy c (Set.Icc (-n) n)) :
-    ∀ m ∉ Set.Icc (-n) n, (stepN tm c).nth m  = none := by
-  simp [stepN]
+lemma SupportedBy_propagate_nth (c : CfgN tm) {S : Set ℤ} (h : IsSupportedBy c S) :
+    ∀ m ∉ S, (stepN tm c).nth m = none := by
+  grind [IsSupportedBy, stepN.nth_udpate]
 
-  sorry
+lemma IsSupportedBy_propagate (c : CfgN tm) (n : ℕ) {S : Set ℤ} (hS : IsSupportedBy c S) :
+    IsSupportedBy ((tm.stepN)^[n] c) (S ∪ Set.Icc (c.n - n) (c.n + n)) := by
+  induction n with
+  | zero =>
+    exact IsSupportedBy_of_subset tm (by simp) hS
+  | succ n ih =>
+    constructor
+    · grind [stepN.pos_bound tm c (n + 1)]
+    · intro n hn
+      rw [Function.iterate_succ_apply']
+      apply SupportedBy_propagate_nth tm _ ih
+      grind
 
-lemma SupportedBy_propagate (c : CfgN tm) (n : ℤ) (h : IsSupportedBy c (Set.Icc (-n) n)) :
-    IsSupportedBy (stepN tm c) (Set.Icc (- (n+1)) (n+1)) := by
-  sorry
+lemma IsSupportedBy_initCfgN (s : List Symbol) :
+    IsSupportedBy (initCfgN tm s) (Set.Icc 0 ↑(s.length - 1)) := by
+  constructor
+  · simp [initCfgN]
+  · intro n
+    cases n
+    <;> simp [initCfgN, initCfg, CfgN.nth]
+    grind
 
-lemma run_SupportedBy_le (tm : SingleTapeTM Symbol) (l : List Symbol) (t : ℕ) :
-    IsSupportedBy (runN tm t l) (Set.Icc (-(t)) (max t l.length)) := by
-  sorry
-
+lemma IsSupportedBy_run (s : List Symbol) (n : ℕ) :
+    IsSupportedBy (runN tm n s) (Set.Icc (-n) ↑(max n (s.length - 1))) := by
+  refine IsSupportedBy_of_subset _ ?_ (IsSupportedBy_propagate _ _ n (IsSupportedBy_initCfgN tm s))
+  grind [initCfgN]
 
 end SingleTapeTM
 end Turing

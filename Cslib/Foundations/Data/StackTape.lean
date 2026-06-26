@@ -198,6 +198,11 @@ theorem nth_succ (l : StackTape Symbol) (n : ℕ) :
     l.nth (n + 1) = l.tail.nth n := by
   grind [nth]
 
+@[simp]
+theorem nil_nth (n : ℕ) :
+    (nil : StackTape Symbol).nth n = none := by
+  simp [nil, nth]
+
 @[ext]
 theorem ext_nth (l₁ l₂ : StackTape Symbol) :
     (∀ n, l₁.nth n = l₂.nth n) → l₁ = l₂ := by

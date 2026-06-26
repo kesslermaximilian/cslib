@@ -222,6 +222,18 @@ lemma write_nth (T : BiTape Symbol) (n : ℤ) (a : Option Symbol) :
   | .ofNat (n + 1) => rfl
   | .negSucc n => rfl
 
+@[simp]
+lemma mk₁_nth_nat (l : List Symbol) (n : ℕ) :
+    (BiTape.mk₁ l).nth n = l[n]? := by
+  cases l
+  <;> cases n
+  <;> simp [mk₁, nth, nil]
+
+@[simp]
+lemma mk₁_nth_int (l : List Symbol) (n : ℕ) :
+    (BiTape.mk₁ l).nth (Int.negSucc n) = none := by
+  cases l
+  <;> simp [mk₁, nth, nil]
 
 /-- The BiTape `T` only contains `none` symbols outside of the support set `S`. -/
 def IsSupportedBy (T : BiTape Symbol) (S : Set ℤ) : Prop :=
