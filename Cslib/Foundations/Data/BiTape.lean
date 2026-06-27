@@ -12,6 +12,7 @@ public import Mathlib.Data.Finset.Attr
 public import Mathlib.Tactic.SetLike
 public import Mathlib.Algebra.Order.Group.Nat
 public import Mathlib.Tactic.NormNum
+public import Mathlib.Data.Int.Range
 
 /-!
 # BiTape: Bidirectionally infinite TM tape representation using StackTape
@@ -234,6 +235,32 @@ lemma mk₁_nth_int (l : List Symbol) (n : ℕ) :
     (BiTape.mk₁ l).nth (Int.negSucc n) = none := by
   cases l
   <;> simp [mk₁, nth, nil]
+
+def mk₃ {a b : ℤ} (f : ∀ n ∈ Int.range a b, Option Symbol) : BiTape Symbol :=
+  let f' : ℤ → Option Symbol := fun n ↦ if h : n ∈ Int.range a b then f n h else none
+  {
+    head := f' 0
+    left := StackTape.mk₁ ((Int.range a 0).map f').reverse
+    right := StackTape.mk₁ ((Int.range 1 b).map f')
+  }
+
+lemma mk₃_nth {a b : ℤ} (f : ∀ n ∈ Int.range a b, Option Symbol) (n : ℤ) :
+    (mk₃ f).nth n = if h : n ∈ Int.range a b then f n h else none := by
+  match n with
+  | 0 => rfl
+  | .ofNat (n + 1) =>
+    simp [mk₃, nth, Int.range]
+    by_cases hb : n ≤ b
+    <;> grind
+  | .negSucc n =>
+    simp [mk₃, nth, ← List.map_reverse]
+    by_cases ha : n < - a
+    · have : (a.range 0).reverse[n]? = some (-↑(n + 1)) := by grind [Int.range]
+      simp [this, Int.mem_range_iff]
+      grind
+    · have : (a.range 0).reverse[n]? = none := by grind [Int.range]
+      simp [this, Int.mem_range_iff]
+      grind
 
 /-- The BiTape `T` only contains `none` symbols outside of the support set `S`. -/
 def IsSupportedBy (T : BiTape Symbol) (S : Set ℤ) : Prop :=

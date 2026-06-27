@@ -7,6 +7,7 @@ Authors: Bolton Bailey
 module
 
 public import Cslib.Init
+public import Mathlib.Data.List.Induction
 
 /-!
 # StackTape: Infinite, eventually-`none` lists of `Option`s
@@ -57,9 +58,23 @@ structure StackTape (Symbol : Type) where
 
 attribute [scoped grind! .] StackTape.toList_getLast?_ne_some_none
 
+
 namespace StackTape
 
 variable {Symbol : Type}
+
+/--
+Construct a `StackTape` from an explicit list.
+Trailing `none` entries will be "removed".
+-/
+def mk₁ (list : List (Option Symbol)) : StackTape Symbol where
+  toList := list.reverse.dropWhile (· = none) |> List.reverse
+  toList_getLast?_ne_some_none := by
+    induction list using List.reverseRecOn with
+    | nil => simp
+    | append_singleton as a ih =>
+      cases a
+      <;> simp_all
 
 /-- The empty `StackTape` -/
 @[scoped grind]
@@ -181,7 +196,7 @@ section Nth
 /-- The n-th element of a `StackTape` is well defined for all `n : ℕ` (unlike in a `List`),
 as the tape continues with an infinite number of `none`s. -/
 def nth (l : StackTape Symbol) (n : ℕ) : Option Symbol :=
-  Option.join l.toList[n]?
+  l.toList[n]?.join
 
 @[simp]
 theorem nth_mapSome (l : List Symbol) (n : ℕ) :
@@ -211,6 +226,17 @@ theorem ext_nth (l₁ l₂ : StackTape Symbol) :
   rw [mk.injEq]
   apply List.ext_getElem?
   grind
+
+@[simp]
+theorem mk₁_nth (l : List (Option Symbol)) (n : ℕ) :
+    (mk₁ l).nth n = l[n]?.join := by
+  induction l using List.reverseRecOn with
+  | nil => simp [mk₁, nth]
+  | append_singleton as a ih =>
+    cases a
+    · simp [mk₁, nth]
+      grind [mk₁, nth]
+    · simp [mk₁, nth]
 
 end Nth
 
