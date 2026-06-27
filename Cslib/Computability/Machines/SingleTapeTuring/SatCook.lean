@@ -338,6 +338,35 @@ lemma innerTapeIndices_posChange (Q : ℕ) (n : ℤ) (h : n ∈ innerTapeIndices
     n + posChange dir ∈ tapeIndices Q := by
   grind [SingleTapeTM.posChange_abs_bound dir]
 
+lemma Mem_WellDefined_aux₀ (Q : ℕ) (v : VarIndex tm) :
+    CNF.VarMem v (WellDefined tm Q) → TMSAT.mem tm Q v := by
+  cases v
+  all_goals
+    simp only [WellDefined, WellDefined₀, List.append_assoc, List.cons_append, List.nil_append,
+      CNF.VarMem_flatten, List.mem_map, List.mem_range, Order.lt_add_one_iff,
+      exists_exists_and_eq_and, List.mem_append, List.mem_cons, List.not_mem_nil, or_false,
+      TMSAT.mem, forall_exists_index, and_imp]
+    rintro _ _ _ (⟨_, _, heq⟩ | ⟨_, _, heq⟩ | heq | heq) hmem
+    all_goals
+      simp [heq, ← heq, CNF.VarMem, StateExists, StateUnique, SymbolUnique, SymbolExists] at hmem
+      try grind
+
+lemma Mem_WellDefined_aux₁ (Q : ℕ) (v : VarIndex tm) :
+    TMSAT.mem tm Q v → CNF.VarMem v (WellDefined tm Q) := by
+  unfold TMSAT.mem
+  cases v
+  all_goals
+    intro ⟨ht, hn⟩
+    simp only [WellDefined, WellDefined₀, List.append_assoc, List.cons_append, List.nil_append,
+      CNF.VarMem_flatten, List.mem_map, List.mem_range, Order.lt_add_one_iff,
+      exists_exists_and_eq_and, List.mem_append, List.mem_cons, List.not_mem_nil, or_false]
+  case state t _ _ =>
+    refine ⟨t, by linarith, StateExists tm Q t, ?_⟩
+    simp [StateExists, CNF.VarMem, states.complete, hn]
+  case tape t n _ =>
+    refine ⟨t, by linarith, SymbolExists tm t n, ?_⟩
+    simp [SymbolExists, CNF.VarMem, symbols.complete, hn]
+
 lemma Mem_TMSAT_aux₀ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIndex tm)
     (h : inst.length + 1 + C ≤ Q) :
     CNF.VarMem v (TMSAT tm Q C inst accept) → TMSAT.mem tm Q v := by
@@ -345,19 +374,7 @@ lemma Mem_TMSAT_aux₀ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : V
   all_goals
     simp only [TMSAT.mem, TMSAT, Init, CNF.VarMem_append, or_assoc]
     rintro (h | h | h | h | h | h | h | h)
-    · simp only [WellDefined, WellDefined₀, List.append_assoc, List.cons_append, List.nil_append,
-        CNF.VarMem_flatten, List.mem_map, List.mem_range, Order.lt_add_one_iff,
-        exists_exists_and_eq_and, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at h
-      obtain ⟨_, _, ⟨_, ⟨h | h | h | h, heq⟩⟩⟩ := h
-      · obtain ⟨n, hn, hfeq⟩ := h
-        simp [← hfeq, CNF.VarMem, SymbolExists] at heq
-        try grind
-      · obtain ⟨_, _, hfeq⟩ := h
-        simp [← hfeq, CNF.VarMem, SymbolUnique] at heq
-        try grind
-      all_goals
-        simp [h, CNF.VarMem, StateExists, StateUnique] at heq
-        try grind
+    · exact Mem_WellDefined_aux₀ tm Q _ h
     · simp only [Propagate, Propagate₀, Propagate₁, CNF.VarMem_flatten, List.mem_map,
         List.mem_range, exists_exists_and_eq_and, CNF.VarMem_append, Prod.exists,
         List.pair_mem_product, ↓existsAndEq, and_true] at h
@@ -374,21 +391,9 @@ lemma Mem_TMSAT_aux₀ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : V
 
 lemma Mem_TMSAT_aux₁ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIndex tm) :
     TMSAT.mem tm Q v → CNF.VarMem v (TMSAT tm Q C inst accept) := by
-  unfold TMSAT.mem
-  cases v
-  all_goals
-    intro ⟨ht, hn⟩
-    simp only [TMSAT, CNF.VarMem_append, or_assoc, WellDefined, WellDefined₀, List.append_assoc,
-      List.cons_append, List.nil_append, CNF.VarMem_flatten, List.mem_map, List.mem_range,
-      Order.lt_add_one_iff, exists_exists_and_eq_and, List.mem_append, List.mem_cons,
-      List.not_mem_nil, or_false]
-    left
-  case state t _ _ =>
-    refine ⟨t, by linarith, StateExists tm Q t, ?_⟩
-    simp [StateExists, CNF.VarMem, states.complete, hn]
-  case tape t n _ =>
-    refine ⟨t, by linarith, SymbolExists tm t n, ?_⟩
-    simp [SymbolExists, CNF.VarMem, symbols.complete, hn]
+  simp only [TMSAT, CNF.VarMem_append]
+  have := Mem_WellDefined_aux₁ tm Q v
+  grind
 
 theorem Mem_TMSAT (Q C : ℕ) (inst : List Symbol) (accept : Symbol)
     (h : inst.length + 1 + C ≤ Q) (v : VarIndex tm) :
@@ -402,13 +407,12 @@ open Encoding
 variable {tm : SingleTapeTM (Option Symbol)}
 variable [DecidableEq Symbol] [DecidableEq tm.State]
 
-/-- An assignment `a` is *suitable*, if
-- It satisfies the system of clauses `WellDefined tm Q`. This means we can reconstruct states from
-the truth assignment
-- The state and tape variables never refer to tape indices outside of `tapeIndices Q`
+/-- An assignment `a` is *normalized* if
+- The r/w is always within [-Q, Q]
+- The tape is always supported by [-Q, Q]
+- The assignment of tape / state is constant after time Q
 -/
-structure IsSuitable (a : VarIndex tm → Bool) (Q : ℕ) where
-  well_defined : CNF.Sat a (WellDefined tm Q)
+structure IsNormalized (a : VarIndex tm → Bool) (Q : ℕ) where
   state_normalized : ∀ n ∉ tapeIndices Q, ∀ t q, a (VarIndex.state t n q) = false
   tape_normalized : ∀ n ∉ tapeIndices Q, ∀ t s, a (VarIndex.tape t n s) = true ↔ s = ␣
   state_eventually_const : ∀ t > Q, ∀ n q, a (VarIndex.state t n q) = a (VarIndex.state Q n q)
@@ -416,11 +420,10 @@ structure IsSuitable (a : VarIndex tm → Bool) (Q : ℕ) where
 
 /-- Normalize a truth assignment by setting correct dummy values for variables not occurring in the
 `TMSAT`.
-- See `mkSuitable_TMSAT_iff` for a proof that this assignment is equivalent for TMSAT
-- See `mkSuitable_IsSuitable` for a proof that this yields a suitable assignment,
-  assuming that the `WellDefined` portion of the SAT is fullfilled
+- See `normalize_IsNormalized` for a proof that this yields a normalized assignment
+- See `normalize_TMSAT_iff` for a proof that this assignment is equivalent for TMSAT
 -/
-def mkSuitable (a : VarIndex tm → Bool) (Q : ℕ) : VarIndex tm → Bool
+def normalize (a : VarIndex tm → Bool) (Q : ℕ) : VarIndex tm → Bool
   | VarIndex.state t n q =>
     if (tapeIndices Q).contains n then
       a (VarIndex.state (min t Q) n q)
@@ -431,9 +434,17 @@ def mkSuitable (a : VarIndex tm → Bool) (Q : ℕ) : VarIndex tm → Bool
       else s = ␣
 
 omit [DecidableEq Symbol] [DecidableEq tm.State] in
-lemma mkSuitable_Sat_iff (Q : ℕ) (a : VarIndex tm → Bool) (sat : CNF (VarIndex tm))
+lemma normalize_IsNormalized (a : VarIndex tm → Bool) (Q : ℕ) :
+    IsNormalized (normalize a Q) Q where
+  state_normalized n hn t q := by simp [normalize, hn]
+  tape_normalized n hn t s := by simp [normalize, hn]
+  state_eventually_const := by grind [normalize]
+  tape_eventually_const := by grind [normalize]
+
+omit [DecidableEq Symbol] [DecidableEq tm.State] in
+lemma normalize_Sat_iff (Q : ℕ) (a : VarIndex tm → Bool) (sat : CNF (VarIndex tm))
     (hmem : ∀ v, CNF.VarMem v sat → TMSAT.mem tm Q v) :
-    CNF.Sat (mkSuitable a Q) sat ↔ CNF.Sat a sat := by
+    CNF.Sat (normalize a Q) sat ↔ CNF.Sat a sat := by
   simp only [CNF.Sat, Bool.coe_iff_coe]
   apply CNF.eval_congr
   intro v hv
@@ -441,26 +452,32 @@ lemma mkSuitable_Sat_iff (Q : ℕ) (a : VarIndex tm → Bool) (sat : CNF (VarInd
   cases v
   all_goals
     dsimp only [TMSAT.mem] at hmem
-    simp [mkSuitable, hmem]
+    simp [normalize, hmem]
 
 @[simp]
-lemma mkSuitable_TMSAT_iff (a : VarIndex tm → Bool) (Q C : ℕ) (inst : List Symbol) (accept : Symbol)
+lemma normalize_TMSAT_iff (a : VarIndex tm → Bool) (Q C : ℕ) (inst : List Symbol) (accept : Symbol)
     (hQ : inst.length + 1 + C ≤ Q) :
-    CNF.Sat (mkSuitable a Q) (TMSAT tm Q C inst accept) ↔ CNF.Sat a (TMSAT tm Q C inst accept) := by
-  apply mkSuitable_Sat_iff
+    CNF.Sat (normalize a Q) (TMSAT tm Q C inst accept) ↔ CNF.Sat a (TMSAT tm Q C inst accept) := by
+  apply normalize_Sat_iff
   simp [Mem_TMSAT, hQ]
 
-lemma mkSuitable_IsSuitable (a : VarIndex tm → Bool) (Q C : ℕ) (inst : List Symbol)
-  (accept : Symbol) (ha : CNF.Sat a (WellDefined tm Q)) (hQ : inst.length + 1 + C ≤ Q) :
-    IsSuitable (mkSuitable a Q) Q where
+
+/-- A normalized assignment `a` is *suitable*, if it satisfies the `WellDefined tm Q` portion of
+`TMSAT`. This allows to (uniquely) reconstruct configurations from the assignment.
+-/
+structure IsSuitable (a : VarIndex tm → Bool) (Q : ℕ) extends IsNormalized a Q where
+  well_defined : CNF.Sat a (WellDefined tm Q)
+
+lemma normalize_IsSuitable_of_WellDefined (a : VarIndex tm → Bool) (Q : ℕ)
+    (ha : CNF.Sat a (WellDefined tm Q)) :
+    IsSuitable (normalize a Q) Q where
   well_defined := by
-    refine (mkSuitable_Sat_iff _ _ _ ?_).mpr ha
-    simp [← Mem_TMSAT _ _ _ _ accept hQ, TMSAT]
-    tauto
-  state_normalized n hn t q := by simp [mkSuitable, hn]
-  tape_normalized n hn t s := by simp [mkSuitable, hn]
-  state_eventually_const := by grind [mkSuitable]
-  tape_eventually_const := by grind [mkSuitable]
+    refine (normalize_Sat_iff _ _ _ ?_).mpr ha
+    apply Mem_WellDefined_aux₀ tm Q
+  state_normalized n hn t q := by simp [normalize, hn]
+  tape_normalized n hn t s := by simp [normalize, hn]
+  state_eventually_const := by grind [normalize]
+  tape_eventually_const := by grind [normalize]
 
 def mkAssignment_aux (states : ℕ → SingleTapeTM.CfgN tm) :
     VarIndex tm → Bool
@@ -471,7 +488,7 @@ def mkAssignment (inst : List (Option Symbol)) :
     VarIndex tm → Bool :=
   mkAssignment_aux (fun t ↦ (tm.runN t inst))
 
-lemma mkAssignment_aux.well_defined (states : ℕ → SingleTapeTM.CfgN tm) (Q : ℕ)
+lemma mkAssignment_aux_WellDefined (states : ℕ → SingleTapeTM.CfgN tm) (Q : ℕ)
     (hs : ∀ t, (states t).n ∈ tapeIndices Q) :
     CNF.Sat (mkAssignment_aux states) (WellDefined tm Q) := by
   simp [WellDefined, CNF.sat_def, WellDefined₀]
