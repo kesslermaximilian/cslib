@@ -418,6 +418,59 @@ structure IsNormalized (a : VarIndex tm → Bool) (Q : ℕ) where
   state_eventually_const : ∀ t > Q, ∀ n q, a (VarIndex.state t n q) = a (VarIndex.state Q n q)
   tape_eventually_const : ∀ t > Q, ∀ n s, a (VarIndex.tape t n s) = a (VarIndex.tape Q n s)
 
+/-- A normalized assignment `a` is *suitable*, if it satisfies the `WellDefined tm Q` portion of
+`TMSAT`. This allows to (uniquely) reconstruct configurations from the assignment.
+-/
+structure IsSuitable (a : VarIndex tm → Bool) (Q : ℕ) extends IsNormalized a Q where
+  well_defined : CNF.Sat a (WellDefined tm Q)
+
+lemma assignment_tape_exists_aux (a : VarIndex tm → Bool) (Q : ℕ)
+    (hs : CNF.Sat a (WellDefined tm Q)) :
+    ∀ t ≤ Q, ∀ n ∈ tapeIndices Q, ∃! s, a (VarIndex.tape t n s) = true := by
+  intro t ht n hn
+  simp only [CNF.Sat, WellDefined, WellDefined₀, List.append_assoc, List.cons_append,
+    List.nil_append, CNF.eval_flatten, List.all_map, List.all_eq_true, List.mem_range,
+    Order.lt_add_one_iff, Function.comp_apply, List.all_append, List.all_cons, List.all_nil,
+    Bool.and_true, Bool.and_eq_true] at hs
+  obtain ⟨he, hu, _, _⟩ := hs t ht
+  apply existsUnique_of_exists_of_unique
+  · simpa [SymbolExists, CNF.eval, CNF.Clause.eval] using he n hn
+  · specialize hu n hn
+    simp [SymbolUnique, CNF.eval, CNF.Clause.eval] at hu
+    grind
+
+lemma assignment_tape_exists (a : VarIndex tm → Bool) (Q : ℕ) (hs : IsSuitable a Q) :
+    ∀ t n,  ∃! s, a (VarIndex.tape t n s) = true := by
+  intro t n
+  wlog ht : t ≤ Q
+  · simp [hs.tape_eventually_const t (by linarith) n, this _ _ hs]
+  · by_cases hn : n ∈ tapeIndices Q
+    · exact assignment_tape_exists_aux a Q hs.well_defined t ht n hn
+    · simp [hs.tape_normalized n hn]
+
+lemma assignment_state_exists (a : VarIndex tm → Bool) (Q : ℕ) (hs : IsSuitable a Q) :
+    ∀ t, ∃! (pos_state : ℤ × Option tm.State),
+      a (VarIndex.state t pos_state.1 pos_state.2) = true := by
+  intro t
+  wlog ht : t ≤ Q
+  · simp [hs.state_eventually_const t (by linarith), this _ _ hs]
+  · have hw := hs.well_defined
+    simp only [CNF.Sat, WellDefined, WellDefined₀, List.append_assoc, List.cons_append,
+      List.nil_append, CNF.eval_flatten, List.all_map, List.all_eq_true, List.mem_range,
+      Order.lt_add_one_iff, Function.comp_apply, List.all_append, List.all_cons, List.all_nil,
+      Bool.and_true, Bool.and_eq_true] at hw
+    obtain ⟨_, _, he, hu⟩ := hw t ht
+    apply existsUnique_of_exists_of_unique
+    · simp only [CNF.eval, StateExists, CNF.Clause.eval, List.size_toArray, List.length_cons,
+      List.length_nil, zero_add, List.all_toArray', List.all_cons, List.any_map, List.all_nil,
+      Bool.and_true, List.any_eq_true, Function.comp_apply, beq_true, Prod.exists,
+      List.pair_mem_product, states.complete, true_and] at he
+      obtain ⟨s, n, _, _⟩ := he
+      use (n, s)
+    · rintro ⟨n₁, s₁⟩ ⟨n₂, s₂⟩ hn₁ hn₂
+      simp [CNF.eval, CNF.Clause.eval, StateUnique] at hu
+      grind [hs.state_normalized]
+
 /-- Normalize a truth assignment by setting correct dummy values for variables not occurring in the
 `TMSAT`.
 - See `normalize_IsNormalized` for a proof that this yields a normalized assignment
@@ -460,13 +513,6 @@ lemma normalize_TMSAT_iff (a : VarIndex tm → Bool) (Q C : ℕ) (inst : List Sy
     CNF.Sat (normalize a Q) (TMSAT tm Q C inst accept) ↔ CNF.Sat a (TMSAT tm Q C inst accept) := by
   apply normalize_Sat_iff
   simp [Mem_TMSAT, hQ]
-
-
-/-- A normalized assignment `a` is *suitable*, if it satisfies the `WellDefined tm Q` portion of
-`TMSAT`. This allows to (uniquely) reconstruct configurations from the assignment.
--/
-structure IsSuitable (a : VarIndex tm → Bool) (Q : ℕ) extends IsNormalized a Q where
-  well_defined : CNF.Sat a (WellDefined tm Q)
 
 lemma normalize_IsSuitable_of_WellDefined (a : VarIndex tm → Bool) (Q : ℕ)
     (ha : CNF.Sat a (WellDefined tm Q)) :
