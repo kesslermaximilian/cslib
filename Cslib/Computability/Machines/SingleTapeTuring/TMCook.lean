@@ -235,20 +235,20 @@ variable {tm} in
   since this talks about the _tape indices_, not necessarily the indices relative
   to the current r/w head
 -/
-def IsSupportedBy (c : CfgN tm) (S : Set ℤ) : Prop :=
+def CfgN.IsSupportedBy (c : CfgN tm) (S : Set ℤ) : Prop :=
   c.n ∈ S ∧ ∀ n, n ∉ S → c.nth n = none
 
 /-- `SupportedBy` is monotone -/
 lemma IsSupportedBy_of_subset {c : CfgN tm} {S S' : Set ℤ} (hS : S ⊆ S') :
-    IsSupportedBy c S → IsSupportedBy c S' := by
-  grind [IsSupportedBy]
+    c.IsSupportedBy S → c.IsSupportedBy S' := by
+  grind [CfgN.IsSupportedBy]
 
-lemma SupportedBy_propagate_nth (c : CfgN tm) {S : Set ℤ} (h : IsSupportedBy c S) :
+lemma SupportedBy_propagate_nth (c : CfgN tm) {S : Set ℤ} (h : c.IsSupportedBy S) :
     ∀ m ∉ S, (stepN tm c).nth m = none := by
-  grind [IsSupportedBy, stepN.nth_udpate]
+  grind [CfgN.IsSupportedBy, stepN.nth_udpate]
 
-lemma IsSupportedBy_propagate (c : CfgN tm) (n : ℕ) {S : Set ℤ} (hS : IsSupportedBy c S) :
-    IsSupportedBy ((tm.stepN)^[n] c) (S ∪ Set.Icc (c.n - n) (c.n + n)) := by
+lemma IsSupportedBy_propagate (c : CfgN tm) (n : ℕ) {S : Set ℤ} (hS : c.IsSupportedBy S) :
+    ((tm.stepN)^[n] c).IsSupportedBy (S ∪ Set.Icc (c.n - n) (c.n + n)) := by
   induction n with
   | zero =>
     exact IsSupportedBy_of_subset tm (by simp) hS
@@ -261,7 +261,7 @@ lemma IsSupportedBy_propagate (c : CfgN tm) (n : ℕ) {S : Set ℤ} (hS : IsSupp
       grind
 
 lemma IsSupportedBy_initCfgN (s : List Symbol) :
-    IsSupportedBy (initCfgN tm s) (Set.Icc 0 ↑(s.length - 1)) := by
+    (initCfgN tm s).IsSupportedBy (Set.Icc 0 ↑(s.length - 1)) := by
   constructor
   · simp [initCfgN]
   · intro n
@@ -270,7 +270,7 @@ lemma IsSupportedBy_initCfgN (s : List Symbol) :
     grind
 
 lemma IsSupportedBy_run (s : List Symbol) (n : ℕ) :
-    IsSupportedBy (runN tm n s) (Set.Icc (-n) ↑(max n (s.length - 1))) := by
+    (runN tm n s).IsSupportedBy (Set.Icc (-n) ↑(max n (s.length - 1))) := by
   refine IsSupportedBy_of_subset _ ?_ (IsSupportedBy_propagate _ _ n (IsSupportedBy_initCfgN tm s))
   grind [initCfgN]
 

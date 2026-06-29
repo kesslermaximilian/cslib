@@ -244,6 +244,7 @@ def mk₃ {a b : ℤ} (f : ∀ n ∈ Int.range a b, Option Symbol) : BiTape Symb
     right := StackTape.mk₁ ((Int.range 1 b).map f')
   }
 
+@[simp]
 lemma mk₃_nth {a b : ℤ} (f : ∀ n ∈ Int.range a b, Option Symbol) (n : ℤ) :
     (mk₃ f).nth n = if h : n ∈ Int.range a b then f n h else none := by
   match n with

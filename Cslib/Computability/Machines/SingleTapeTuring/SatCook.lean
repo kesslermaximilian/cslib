@@ -439,21 +439,44 @@ lemma assignment_tape_exists_aux (a : VarIndex tm → Bool) (Q : ℕ)
     simp [SymbolUnique, CNF.eval, CNF.Clause.eval] at hu
     grind
 
-lemma assignment_tape_exists (a : VarIndex tm → Bool) (Q : ℕ) (hs : IsSuitable a Q) :
+lemma assignment_tape_exists (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) :
     ∀ t n,  ∃! s, a (VarIndex.tape t n s) = true := by
   intro t n
   wlog ht : t ≤ Q
-  · simp [hs.tape_eventually_const t (by linarith) n, this _ _ hs]
+  · simp [hs.tape_eventually_const t (by linarith) n, this _ hs]
   · by_cases hn : n ∈ tapeIndices Q
     · exact assignment_tape_exists_aux a Q hs.well_defined t ht n hn
     · simp [hs.tape_normalized n hn]
 
-lemma assignment_state_exists (a : VarIndex tm → Bool) (Q : ℕ) (hs : IsSuitable a Q) :
+lemma assignment_state_exists' (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) :
+    ∀ t, ∃! (pos_state : (Set.Icc (α := ℤ) (-Q) Q) × Option tm.State),
+      a (VarIndex.state t pos_state.1 pos_state.2) = true := by
+  intro t
+  wlog ht : t ≤ Q
+  · simp [hs.state_eventually_const t (by linarith), this _ hs]
+  · have hw := hs.well_defined
+    simp only [CNF.Sat, WellDefined, WellDefined₀, List.append_assoc, List.cons_append,
+      List.nil_append, CNF.eval_flatten, List.all_map, List.all_eq_true, List.mem_range,
+      Order.lt_add_one_iff, Function.comp_apply, List.all_append, List.all_cons, List.all_nil,
+      Bool.and_true, Bool.and_eq_true] at hw
+    obtain ⟨_, _, he, hu⟩ := hw t ht
+    apply existsUnique_of_exists_of_unique
+    · simp only [CNF.eval, StateExists, CNF.Clause.eval, List.size_toArray, List.length_cons,
+      List.length_nil, zero_add, List.all_toArray', List.all_cons, List.any_map, List.all_nil,
+      Bool.and_true, List.any_eq_true, Function.comp_apply, beq_true, Prod.exists,
+      List.pair_mem_product, states.complete, true_and] at he
+      obtain ⟨s, n, _, _⟩ := he
+      use (⟨n, by grind [Int.mem_range_iff]⟩, s)
+    · rintro ⟨n₁, s₁⟩ ⟨n₂, s₂⟩ hn₁ hn₂
+      simp [CNF.eval, CNF.Clause.eval, StateUnique] at hu
+      grind [hs.state_normalized]
+
+lemma assignment_state_exists (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) :
     ∀ t, ∃! (pos_state : ℤ × Option tm.State),
       a (VarIndex.state t pos_state.1 pos_state.2) = true := by
   intro t
   wlog ht : t ≤ Q
-  · simp [hs.state_eventually_const t (by linarith), this _ _ hs]
+  · simp [hs.state_eventually_const t (by linarith), this _ hs]
   · have hw := hs.well_defined
     simp only [CNF.Sat, WellDefined, WellDefined₀, List.append_assoc, List.cons_append,
       List.nil_append, CNF.eval_flatten, List.all_map, List.all_eq_true, List.mem_range,
@@ -470,6 +493,49 @@ lemma assignment_state_exists (a : VarIndex tm → Bool) (Q : ℕ) (hs : IsSuita
     · rintro ⟨n₁, s₁⟩ ⟨n₂, s₂⟩ hn₁ hn₂
       simp [CNF.eval, CNF.Clause.eval, StateUnique] at hu
       grind [hs.state_normalized]
+
+omit [Fintype Symbol] [DecidableEq Symbol] in
+def mkShiftedBiTape (Q : ℕ) (f : ℤ → Option Symbol) (head : ℤ) : BiTape Symbol :=
+  BiTape.mk₃ (a := -Q - head) (b := Q + 1 - head) fun n _ ↦ f (n + head)
+
+omit [Fintype Symbol] [DecidableEq Symbol] in
+@[simp]
+lemma recoverTape_nth {Q : ℕ} (f : ℤ → Option Symbol) (head : ℤ) (n : ℤ) :
+    (mkShiftedBiTape Q f head).nth n
+    = if n + head ∈ tapeIndices Q then (f (n + head)) else none := by
+  simp [mkShiftedBiTape]
+  grind [Int.mem_range_iff]
+
+def recoverCfgN (a : VarIndex tm → Bool) {Q : ℕ} (hS : IsSuitable a Q) (t : ℕ) : tm.CfgN :=
+  let (n, q) := Exists.choose (assignment_state_exists a hS t)
+  {
+    state := q
+    BiTape := mkShiftedBiTape Q (fun n => Exists.choose (assignment_tape_exists a hS t n)) n
+    n := n
+  }
+
+lemma recoverCfgN_tape_spec (a : VarIndex tm → Bool) {Q : ℕ} (hS : IsSuitable a Q) (t : ℕ)
+    (n : ℤ) (s : Option (Option Symbol)) :
+    a (VarIndex.tape t n s) = true ↔ (recoverCfgN a hS t).nth n = s := by
+  simp [recoverCfgN, SingleTapeTM.CfgN.nth]
+  by_cases hn : n ∈ tapeIndices Q
+  · simp [hn, ExistsUnique.choose_eq_iff (assignment_tape_exists a hS t n)]
+  · simp [hn, hS.tape_normalized, eq_comm]
+
+lemma recoverCfgN_state_spec (a : VarIndex tm → Bool) {Q : ℕ} (hS : IsSuitable a Q) (t : ℕ)
+    (n : ℤ) (s : Option tm.State) :
+    a (VarIndex.state t n s) = true
+    ↔ (recoverCfgN a hS t).n = n ∧ (recoverCfgN a hS t).state = s := by
+  grind [recoverCfgN, ExistsUnique.choose_eq_iff (assignment_state_exists a hS t) (a := (n, s))]
+
+lemma recoverCfgN_SupportedBy (a : VarIndex tm → Bool) (Q : ℕ) (hS : IsSuitable a Q) (t : ℕ) :
+    (recoverCfgN a hS t).IsSupportedBy (Set.Icc (-Q) Q) := by
+  unfold SingleTapeTM.CfgN.IsSupportedBy
+  constructor
+  · grind [Int.mem_range_iff, hS.state_normalized,
+      recoverCfgN_state_spec a hS t (recoverCfgN a hS t).n (recoverCfgN a hS t).state]
+  · simp_rw [← recoverCfgN_tape_spec]
+    grind [Int.mem_range_iff, hS.tape_normalized]
 
 /-- Normalize a truth assignment by setting correct dummy values for variables not occurring in the
 `TMSAT`.
