@@ -506,7 +506,7 @@ lemma recoverTape_nth {Q : ℕ} (f : ℤ → Option Symbol) (head : ℤ) (n : �
   simp [mkShiftedBiTape]
   grind [Int.mem_range_iff]
 
-def recoverCfgN (a : VarIndex tm → Bool) {Q : ℕ} (hS : IsSuitable a Q) (t : ℕ) : tm.CfgN :=
+def recoverCfgN_aux (a : VarIndex tm → Bool) {Q : ℕ} (hS : IsSuitable a Q) (t : ℕ) : tm.CfgN :=
   let (n, q) := Exists.choose (assignment_state_exists a hS t)
   {
     state := q
@@ -514,10 +514,18 @@ def recoverCfgN (a : VarIndex tm → Bool) {Q : ℕ} (hS : IsSuitable a Q) (t : 
     n := n
   }
 
-lemma recoverCfgN_tape_spec (a : VarIndex tm → Bool) {Q : ℕ} (hS : IsSuitable a Q) (t : ℕ)
+open Classical in
+/--
+Attempts to recover the configuration specified by the assignment `a`.
+If `a` is not suitable, this falls back to the default configuration.
+-/
+def recoverCfgN (a : VarIndex tm → Bool) (Q : ℕ) (t : ℕ) : tm.CfgN :=
+  if h : IsSuitable a Q then recoverCfgN_aux a h t else default
+
+lemma recoverCfgN_tape_spec {a : VarIndex tm → Bool} {Q : ℕ} (hS : IsSuitable a Q) (t : ℕ)
     (n : ℤ) (s : Option (Option Symbol)) :
-    a (VarIndex.tape t n s) = true ↔ (recoverCfgN a hS t).nth n = s := by
-  simp [recoverCfgN, SingleTapeTM.CfgN.nth]
+    a (VarIndex.tape t n s) = true ↔ (recoverCfgN a Q t).nth n = s := by
+  simp [recoverCfgN, SingleTapeTM.CfgN.nth, hS, recoverCfgN_aux]
   by_cases hn : n ∈ tapeIndices Q
   · simp [hn, ExistsUnique.choose_eq_iff (assignment_tape_exists a hS t n)]
   · simp [hn, hS.tape_normalized, eq_comm]
@@ -525,16 +533,17 @@ lemma recoverCfgN_tape_spec (a : VarIndex tm → Bool) {Q : ℕ} (hS : IsSuitabl
 lemma recoverCfgN_state_spec (a : VarIndex tm → Bool) {Q : ℕ} (hS : IsSuitable a Q) (t : ℕ)
     (n : ℤ) (s : Option tm.State) :
     a (VarIndex.state t n s) = true
-    ↔ (recoverCfgN a hS t).n = n ∧ (recoverCfgN a hS t).state = s := by
-  grind [recoverCfgN, ExistsUnique.choose_eq_iff (assignment_state_exists a hS t) (a := (n, s))]
+    ↔ (recoverCfgN a Q t).n = n ∧ (recoverCfgN a Q t).state = s := by
+  grind [recoverCfgN, recoverCfgN_aux,
+    ExistsUnique.choose_eq_iff (assignment_state_exists a hS t) (a := (n, s))]
 
 lemma recoverCfgN_SupportedBy (a : VarIndex tm → Bool) (Q : ℕ) (hS : IsSuitable a Q) (t : ℕ) :
-    (recoverCfgN a hS t).IsSupportedBy (Set.Icc (-Q) Q) := by
+    (recoverCfgN a Q t).IsSupportedBy (Set.Icc (-Q) Q) := by
   unfold SingleTapeTM.CfgN.IsSupportedBy
   constructor
   · grind [Int.mem_range_iff, hS.state_normalized,
-      recoverCfgN_state_spec a hS t (recoverCfgN a hS t).n (recoverCfgN a hS t).state]
-  · simp_rw [← recoverCfgN_tape_spec]
+      recoverCfgN_state_spec a hS t (recoverCfgN a Q t).n (recoverCfgN a Q t).state]
+  · simp_rw [← recoverCfgN_tape_spec hS]
     grind [Int.mem_range_iff, hS.tape_normalized]
 
 /-- Normalize a truth assignment by setting correct dummy values for variables not occurring in the
