@@ -32,6 +32,9 @@ That is, tape index `0` will always refer to the cell on the tape where the r/w 
 the head: The _tape index_ is invariant with respect to the r/w head moving. -/
 abbrev CfgN.nth (c : CfgN tm) (n : ℤ) : Option Symbol := c.BiTape.nth (n - c.n)
 
+@[simp, grind =]
+lemma CfgN.nth_head (c : CfgN tm) : c.nth c.n = c.BiTape.head := by simp [CfgN.nth]
+
 
 def initCfgN (s : List Symbol) : tm.CfgN := ⟨initCfg tm s, 0⟩
 
@@ -195,7 +198,7 @@ lemma stepN.BiTape_update :
   cases state
   <;> rfl
 
-lemma stepN.nth_udpate (n : ℤ) :
+lemma stepN.nth_update (n : ℤ) :
     (stepN tm c).nth n =
       if n = c.n
       then (tm.tr' c.state c.BiTape.head).fst.symbol
@@ -228,6 +231,10 @@ We prove some lemmata about how the support set changes upon state transitions.
 -/
 
 variable {tm} in
+def CfgN.TapeIsSupportedBy (c : CfgN tm) (S : Set ℤ) : Prop :=
+  ∀ n, n ∉ S → c.nth n = none
+
+variable {tm} in
 /-- The set `S` is a support of the state, i.e. all non-default tape indices lie in `S`
   and the r/w head is in `S` as well.
 
@@ -236,16 +243,28 @@ variable {tm} in
   to the current r/w head
 -/
 def CfgN.IsSupportedBy (c : CfgN tm) (S : Set ℤ) : Prop :=
-  c.n ∈ S ∧ ∀ n, n ∉ S → c.nth n = none
+  c.n ∈ S ∧ c.TapeIsSupportedBy S
+
+variable {tm} in
+lemma CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy {c : CfgN tm} {S : Set ℤ} :
+    c.TapeIsSupportedBy S ↔ c.BiTape.IsSupportedBy {s - c.n | s ∈ S} := by
+  simp only [CfgN.TapeIsSupportedBy, IsSupportedBy, Set.mem_setOf_eq, not_exists, not_and]
+  constructor
+  · intro hnone n
+    grind [hnone (n + c.n)]
+  · grind
 
 /-- `SupportedBy` is monotone -/
 lemma IsSupportedBy_of_subset {c : CfgN tm} {S S' : Set ℤ} (hS : S ⊆ S') :
     c.IsSupportedBy S → c.IsSupportedBy S' := by
-  grind [CfgN.IsSupportedBy]
+  grind [CfgN.IsSupportedBy, CfgN.TapeIsSupportedBy]
 
-lemma SupportedBy_propagate_nth (c : CfgN tm) {S : Set ℤ} (h : c.IsSupportedBy S) :
-    ∀ m ∉ S, (stepN tm c).nth m = none := by
-  grind [CfgN.IsSupportedBy, stepN.nth_udpate]
+lemma SupportedBy_propagate_Tape (c : CfgN tm) {S : Set ℤ} (h : c.IsSupportedBy S) :
+    (stepN tm c).TapeIsSupportedBy S := by
+  grind [CfgN.IsSupportedBy, stepN.nth_update, CfgN.TapeIsSupportedBy]
+
+--lemma SupportedBy_propagate_BiTape_Support (c : CfgN tm) (S : Set ℤ) (h : c.IsSupportedBy S) :
+--  (stepN tm c).BiTape.IsSupportedBy
 
 lemma IsSupportedBy_propagate (c : CfgN tm) (n : ℕ) {S : Set ℤ} (hS : c.IsSupportedBy S) :
     ((tm.stepN)^[n] c).IsSupportedBy (S ∪ Set.Icc (c.n - n) (c.n + n)) := by
@@ -257,7 +276,7 @@ lemma IsSupportedBy_propagate (c : CfgN tm) (n : ℕ) {S : Set ℤ} (hS : c.IsSu
     · grind [stepN.pos_bound tm c (n + 1)]
     · intro n hn
       rw [Function.iterate_succ_apply']
-      apply SupportedBy_propagate_nth tm _ ih
+      apply SupportedBy_propagate_Tape tm _ ih
       grind
 
 lemma IsSupportedBy_initCfgN (s : List Symbol) :
@@ -273,6 +292,38 @@ lemma IsSupportedBy_run (s : List Symbol) (n : ℕ) :
     (runN tm n s).IsSupportedBy (Set.Icc (-n) ↑(max n (s.length - 1))) := by
   refine IsSupportedBy_of_subset _ ?_ (IsSupportedBy_propagate _ _ n (IsSupportedBy_initCfgN tm s))
   grind [initCfgN]
+
+lemma stepN_update_pos_state_iff (c₁ c₂ : tm.CfgN) {S : Set ℤ} (h : c₁.n ∈ S) :
+    (tm.stepN c₁).n = c₂.n ∧ (tm.stepN c₁).state = c₂.state ↔
+    ∀ (n : S) (s : Option tm.State) (x : (Option Symbol)),
+    c₁.nth n = x → c₁.n = n → c₁.state = s
+    → c₂.n = n + posChange (tm.tr' s x).fst.movement ∧ c₂.state = (tm.tr' s x).snd := by
+  simp [stepN.state_update, stepN.pos_update]
+  grind
+
+lemma foo {S : Set ℤ} (n : ℤ) (P : ℤ → Prop) :
+    (∀ x ∈ {s - n | s ∈ S}, P x) ↔ ∀ x ∈ S, P (x - n) := by
+  grind
+
+lemma stepN_update_BiTape_iff (c₁ c₂ : tm.CfgN) {S : Set ℤ}
+    (hc₁ : c₁.IsSupportedBy S) (hc₂ : c₂.IsSupportedBy S) (hpos : (tm.stepN c₁).n = c₂.n) :
+    (tm.stepN c₁).BiTape = c₂.BiTape ↔
+    ∀ (n : S) (s : Option tm.State) (x : Option Symbol),
+    (c₁.nth n = x → c₁.n = n → c₁.state = s → c₂.nth n = (tm.tr' s x).1.symbol)
+    ∧ (∀ (m : S), m ≠ n → c₁.nth m = x → c₁.n = n → c₁.state = s → c₂.nth m = x)
+    := by
+  have : (∀ n ∈ S, (tm.stepN c₁).nth n = c₂.nth n) ↔ (tm.stepN c₁).BiTape = c₂.BiTape := by
+    have hs₁ : (tm.stepN c₁).BiTape.IsSupportedBy {s - c₂.n | s ∈ S} := by
+      rw [← hpos, ← CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy]
+      apply SupportedBy_propagate_Tape
+      assumption
+    have hs₂ : c₂.BiTape.IsSupportedBy {s - c₂.n | s ∈ S} :=
+      CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy.mp hc₂.right
+    simpa [CfgN.nth, hpos] using BiTape.ext_nth_SupportedBy hs₁ hs₂
+  simp [← this, stepN.nth_update]
+  grind [hc₁.1]
+
+
 
 end SingleTapeTM
 end Turing

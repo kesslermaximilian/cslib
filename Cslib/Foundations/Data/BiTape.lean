@@ -174,6 +174,10 @@ def nth (T : BiTape Symbol) : ℤ → Option Symbol
   | .ofNat (n + 1) => T.right.nth n
   | .negSucc n => T.left.nth n
 
+@[simp]
+lemma nth_zero (T : BiTape Symbol) :
+    T.nth 0 = T.head := rfl
+
 @[ext]
 /- Two BiTapes are equal if their `n`th tape symbol is equal for all `n ∈ ℤ`. -/
 theorem ext_nth (T₁ T₂ : BiTape Symbol) :
@@ -265,18 +269,21 @@ lemma mk₃_nth {a b : ℤ} (f : ∀ n ∈ Int.range a b, Option Symbol) (n : �
 
 /-- The BiTape `T` only contains `none` symbols outside of the support set `S`. -/
 def IsSupportedBy (T : BiTape Symbol) (S : Set ℤ) : Prop :=
-  ∀ n ∉ S, T.nth n = default
+  ∀ n ∉ S, T.nth n = none
 
 /- Two BiTapes are equal if their `n`th tape symbols agree on a support set. -/
 theorem ext_nth_SupportedBy {T₁ T₂ : BiTape Symbol} {S : Set ℤ} (h₁ : T₁.IsSupportedBy S)
     (h₂ : T₂.IsSupportedBy S) :
-    (∀ n ∈ S, T₁.nth n = T₂.nth n) → T₁ = T₂ := by
-  intro h
-  apply ext_nth
-  intro n
-  by_cases hn : n ∈ S
-  · exact h n hn
-  · rw [h₁ n hn, h₂ n hn]
+    (∀ n ∈ S, T₁.nth n = T₂.nth n) ↔ T₁ = T₂ := by
+  constructor
+  · intro h
+    apply ext_nth
+    intro n
+    by_cases hn : n ∈ S
+    · exact h n hn
+    · rw [h₁ n hn, h₂ n hn]
+  · intro h
+    simp [h]
 
 end Nth
 

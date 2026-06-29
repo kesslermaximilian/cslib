@@ -32,6 +32,16 @@ lemma CNF.eval_flatten {α : Type*} (fs : List (CNF α)) (a : α → Bool) :
   | nil => simp [CNF.flatten]
   | cons f fs ih => simp [CNF.flatten, ih]
 
+@[simp]
+lemma CNF.clauses_flatten {α β : Type*} (fs : List (CNF α)) :
+    (CNF.flatten fs).clauses = Array.flatten ⟨(fs.map (·.clauses))⟩ := by
+  induction fs with
+  | nil => simp [CNF.flatten, empty]
+  | cons f fs ih =>
+    simp [CNF.flatten, CNF.append]
+    sorry
+
+
 end Std.Sat
 
 
@@ -530,21 +540,56 @@ lemma recoverCfgN_tape_spec {a : VarIndex tm → Bool} {Q : ℕ} (hS : IsSuitabl
   · simp [hn, ExistsUnique.choose_eq_iff (assignment_tape_exists a hS t n)]
   · simp [hn, hS.tape_normalized, eq_comm]
 
-lemma recoverCfgN_state_spec (a : VarIndex tm → Bool) {Q : ℕ} (hS : IsSuitable a Q) (t : ℕ)
+lemma recoverCfgN_tape_spec' {a : VarIndex tm → Bool} {Q : ℕ} (hS : IsSuitable a Q) (t : ℕ)
+    (n : ℤ) (s : Option (Option Symbol)) :
+    a (VarIndex.tape t n s) = false ↔ (recoverCfgN a Q t).nth n ≠ s := by
+  grind [recoverCfgN_tape_spec]
+
+lemma recoverCfgN_state_spec {a : VarIndex tm → Bool} {Q : ℕ} (hS : IsSuitable a Q) (t : ℕ)
     (n : ℤ) (s : Option tm.State) :
     a (VarIndex.state t n s) = true
     ↔ (recoverCfgN a Q t).n = n ∧ (recoverCfgN a Q t).state = s := by
   grind [recoverCfgN, recoverCfgN_aux,
     ExistsUnique.choose_eq_iff (assignment_state_exists a hS t) (a := (n, s))]
 
-lemma recoverCfgN_SupportedBy (a : VarIndex tm → Bool) (Q : ℕ) (hS : IsSuitable a Q) (t : ℕ) :
+lemma recoverCfgN_state_spec' {a : VarIndex tm → Bool} {Q : ℕ} (hS : IsSuitable a Q) (t : ℕ)
+    (n : ℤ) (s : Option tm.State) :
+    a (VarIndex.state t n s) = false
+    ↔ (recoverCfgN a Q t).n ≠ n ∨  (recoverCfgN a Q t).state ≠ s := by
+  grind [recoverCfgN_state_spec]
+
+lemma recoverCfgN_SupportedBy {a : VarIndex tm → Bool} (Q : ℕ) (hS : IsSuitable a Q) (t : ℕ) :
     (recoverCfgN a Q t).IsSupportedBy (Set.Icc (-Q) Q) := by
   unfold SingleTapeTM.CfgN.IsSupportedBy
   constructor
   · grind [Int.mem_range_iff, hS.state_normalized,
-      recoverCfgN_state_spec a hS t (recoverCfgN a Q t).n (recoverCfgN a Q t).state]
+      recoverCfgN_state_spec hS t (recoverCfgN a Q t).n (recoverCfgN a Q t).state]
   · simp_rw [← recoverCfgN_tape_spec hS]
     grind [Int.mem_range_iff, hS.tape_normalized]
+
+
+
+lemma stepN_qn_iff_Propagate₁ (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) (t : ℕ)
+    (hn : (recoverCfgN a Q t).n ∈ Set.Icc (α := ℤ) (-(Q - 1)) (Q - 1))
+    :
+    (tm.stepN (recoverCfgN a Q t)).n = (recoverCfgN a Q (t + 1)).n
+    ∧ (tm.stepN (recoverCfgN a Q t )).state = (recoverCfgN a Q (t + 1)).state
+    ↔ CNF.Sat a (Encoding.Propagate₁ tm Q t) := by
+  simp [Propagate₁, CNF.Sat, UpdateState]
+  simp [recoverCfgN_state_spec hs, recoverCfgN_state_spec' hs, recoverCfgN_tape_spec' hs,
+    SingleTapeTM.stepN_update_pos_state_iff tm _ _ hn, innerTapeIndices, Int.mem_range_iff,
+    CNF.eval]
+  grind
+
+lemma stepN_BiTape_iff_Propagate (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) (t : ℕ)
+    (hs₀ : (recoverCfgN a Q t).IsSupportedBy (Set.Icc (-(Q - 1)) (Q - 1)))
+    (hstep_n : (recoverCfgN a Q (t + 1)).n = (tm.stepN (recoverCfgN a Q t)).n) :
+    (tm.stepN (recoverCfgN a Q t)).BiTape = (recoverCfgN a Q t).BiTape
+    ↔ CNF.Sat a (Encoding.Propagate₀ tm Q t) := by
+  simp [Propagate₀, CNF.Sat, UpdateTape, KeepTape]
+  simp [CNF.eval, recoverCfgN_tape_spec' hs, recoverCfgN_state_spec' hs, recoverCfgN_tape_spec hs]
+
+  sorry
 
 /-- Normalize a truth assignment by setting correct dummy values for variables not occurring in the
 `TMSAT`.
