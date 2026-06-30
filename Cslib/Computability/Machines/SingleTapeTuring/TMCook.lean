@@ -305,12 +305,13 @@ lemma foo {S : Set ℤ} (n : ℤ) (P : ℤ → Prop) :
     (∀ x ∈ {s - n | s ∈ S}, P x) ↔ ∀ x ∈ S, P (x - n) := by
   grind
 
-lemma stepN_update_BiTape_iff (c₁ c₂ : tm.CfgN) {S : Set ℤ}
-    (hc₁ : c₁.IsSupportedBy S) (hc₂ : c₂.IsSupportedBy S) (hpos : (tm.stepN c₁).n = c₂.n) :
+lemma stepN_update_BiTape_iff {c₁ c₂ : tm.CfgN} {S : Set ℤ}
+    (hc₁ : c₁.IsSupportedBy S) (hc₂ : c₂.TapeIsSupportedBy S) (hpos : (tm.stepN c₁).n = c₂.n) :
     (tm.stepN c₁).BiTape = c₂.BiTape ↔
-    ∀ (n : S) (s : Option tm.State) (x : Option Symbol),
-    (c₁.nth n = x → c₁.n = n → c₁.state = s → c₂.nth n = (tm.tr' s x).1.symbol)
-    ∧ (∀ (m : S), m ≠ n → c₁.nth m = x → c₁.n = n → c₁.state = s → c₂.nth m = x)
+    ∀ (n : ℤ) (b : Option Symbol) (s : Option tm.State),
+    n ∈ S →
+    (¬ c₁.nth n = b ∨ (¬ c₁.n = n ∨ ¬ c₁.state = s)  ∨ c₂.nth n = (tm.tr' s b).1.symbol)
+    ∧ ∀ x ∈ S, x = n ∨ (¬ c₁.nth n = b ∨ (¬ c₁.n = x ∨ ¬c₁.state = s) ∨ c₂.nth n = b)
     := by
   have : (∀ n ∈ S, (tm.stepN c₁).nth n = c₂.nth n) ↔ (tm.stepN c₁).BiTape = c₂.BiTape := by
     have hs₁ : (tm.stepN c₁).BiTape.IsSupportedBy {s - c₂.n | s ∈ S} := by
@@ -318,12 +319,10 @@ lemma stepN_update_BiTape_iff (c₁ c₂ : tm.CfgN) {S : Set ℤ}
       apply SupportedBy_propagate_Tape
       assumption
     have hs₂ : c₂.BiTape.IsSupportedBy {s - c₂.n | s ∈ S} :=
-      CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy.mp hc₂.right
+      CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy.mp hc₂
     simpa [CfgN.nth, hpos] using BiTape.ext_nth_SupportedBy hs₁ hs₂
-  simp [← this, stepN.nth_update]
+  simp [← this, stepN.nth_update, ← imp_iff_not_or]
   grind [hc₁.1]
-
-
 
 end SingleTapeTM
 end Turing

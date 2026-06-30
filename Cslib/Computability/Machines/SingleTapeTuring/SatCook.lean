@@ -560,7 +560,7 @@ lemma recoverCfgN_state_spec' {a : VarIndex tm → Bool} {Q : ℕ} (hS : IsSuita
 
 lemma recoverCfgN_SupportedBy {a : VarIndex tm → Bool} (Q : ℕ) (hS : IsSuitable a Q) (t : ℕ) :
     (recoverCfgN a Q t).IsSupportedBy (Set.Icc (-Q) Q) := by
-  unfold SingleTapeTM.CfgN.IsSupportedBy
+  unfold SingleTapeTM.CfgN.IsSupportedBy SingleTapeTM.CfgN.TapeIsSupportedBy
   constructor
   · grind [Int.mem_range_iff, hS.state_normalized,
       recoverCfgN_state_spec hS t (recoverCfgN a Q t).n (recoverCfgN a Q t).state]
@@ -582,14 +582,16 @@ lemma stepN_qn_iff_Propagate₁ (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSui
   grind
 
 lemma stepN_BiTape_iff_Propagate (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) (t : ℕ)
-    (hs₀ : (recoverCfgN a Q t).IsSupportedBy (Set.Icc (-(Q - 1)) (Q - 1)))
     (hstep_n : (recoverCfgN a Q (t + 1)).n = (tm.stepN (recoverCfgN a Q t)).n) :
-    (tm.stepN (recoverCfgN a Q t)).BiTape = (recoverCfgN a Q t).BiTape
+    (tm.stepN (recoverCfgN a Q t)).BiTape = (recoverCfgN a Q (t + 1)).BiTape
     ↔ CNF.Sat a (Encoding.Propagate₀ tm Q t) := by
-  simp [Propagate₀, CNF.Sat, UpdateTape, KeepTape]
+  simp [CNF.Sat, Propagate₀, UpdateTape, KeepTape]
   simp [CNF.eval, recoverCfgN_tape_spec' hs, recoverCfgN_state_spec' hs, recoverCfgN_tape_spec hs]
-
-  sorry
+  have hlem := SingleTapeTM.stepN_update_BiTape_iff tm
+    (recoverCfgN_SupportedBy Q hs t) (recoverCfgN_SupportedBy Q hs (t + 1)).right (Eq.symm hstep_n)
+  have (n : ℤ) : n ∈ Int.range (-Q) (Q + 1) ↔ n ∈ Set.Icc (α := ℤ) (-Q) Q := by
+    grind [Int.mem_range_iff]
+  simp [tapeIndices, this, hlem]
 
 /-- Normalize a truth assignment by setting correct dummy values for variables not occurring in the
 `TMSAT`.
