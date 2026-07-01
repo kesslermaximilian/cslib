@@ -372,12 +372,13 @@ lemma initCfgN_iff (tm : SingleTapeTM (Option Symbol)) (inst : List Symbol) {C Q
     grind [List.combine]
   · rintro ⟨hpos, hstate, hinst, hsep, hcert, hnone⟩
     let indices := Int.range (inst.length + 1) (inst.length + C + 1)
-    have : ∀ n, n ∈ indices → (c.nth n ).join.isSome := by
+    have : ∀ (n : Fin C), (c.nth (inst.length + 1 + n)).join.isSome := by
       intro n
-      specialize hcert n
+      specialize hcert (inst.length + 1 + n)
       grind [Int.mem_range_iff, Option.ne_none_iff_isSome]
-    let cert := indices.pmap (fun n h => (c.nth n).join.get h) this
-    have hlen : cert.length = C := by simp [cert, indices, Int.range]
+    let cert := (List.finRange C).map
+      (fun (n : Fin C) => (c.nth (inst.length + 1 + n)).join.get (this n))
+    have hlen : cert.length = C := by simp [cert]
     use cert
     constructor
     · exact hlen
@@ -387,8 +388,7 @@ lemma initCfgN_iff (tm : SingleTapeTM (Option Symbol)) (inst : List Symbol) {C Q
       · rw [← CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy' _ hpos]
         exact hs.right
       · refine BiTape.IsSupportedBy_of_subset ?_ (mk₁_IsSupportedBy (List.combine inst cert))
-        simp [List.combine]
-        grind
+        grind [List.combine]
       · intro n hn
         rw [show c.BiTape.nth n = c.nth n by simp [CfgN.nth, hpos]]
         simp only [index_partition h, Set.mem_union, or_assoc] at hn
@@ -396,11 +396,15 @@ lemma initCfgN_iff (tm : SingleTapeTM (Option Symbol)) (inst : List Symbol) {C Q
         · rw [zip_Idx_iff] at hinst
           specialize hinst n h.1 h.2
           grind [List.combine]
-        · grind [List.combine]
-        · specialize hcert n h.1 h.2
-          let m := n.toNat
+        · let m := n.toNat
           have : n = m := by grind
-          grind [Int.range, List.combine]
+          grind [List.combine]
+        · specialize hcert n h.1 h.2
+          have : ¬ n < 0 := by grind
+          simp only [mk₁_nth, this, ↓reduceIte]
+          rw [List.combine, List.getElem?_append_right (by grind)]
+          simp [cert]
+          grind
         all_goals
           simp [CfgN.nth, hpos] at hnone
           grind [List.combine]

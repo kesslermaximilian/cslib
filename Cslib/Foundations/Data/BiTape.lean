@@ -240,19 +240,25 @@ lemma mk₁_nth_int (l : List Symbol) (n : ℕ) :
   cases l
   <;> simp [mk₁, nth, nil]
 
-@[grind =]
+--@[grind =]
 lemma mk₁_nth_neg (l : List Symbol) (n : ℤ) (h : n < 0) :
     (BiTape.mk₁ l).nth n = none := by
   let m := (-n - 1).toNat
   have : n = Int.negSucc m := by grind
   simp [this]
 
-@[grind =]
+--@[grind =]
 lemma mk₁_nth_pos (l : List Symbol) (n : ℤ) (h : 0 ≤ n) :
     (BiTape.mk₁ l).nth n = l[n.toNat]? := by
   let m := n.toNat
   have : n = m := by grind
   simp [this]
+
+@[grind =, simp]
+lemma mk₁_nth (l : List Symbol) (n : ℤ) :
+    (BiTape.mk₁ l).nth n = if n < 0 then none else l[n.toNat]? := by
+  cases n
+  <;> simp
 
 
 def mk₃ {a b : ℤ} (f : ∀ n ∈ Int.range a b, Option Symbol) : BiTape Symbol :=
