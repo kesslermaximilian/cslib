@@ -6,6 +6,9 @@ public import Mathlib.Tactic.Ring
 
 @[expose] public section
 
+def List.combine {α : Type*} (l₁ : List α) (l₂ : List α) : List (Option α) :=
+  l₁.map some ++ [none] ++ l₂.map some
+
 namespace Turing
 namespace SingleTapeTM
 
@@ -14,7 +17,7 @@ open TransitionMachine
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] (tm : SingleTapeTM Symbol)
 
-
+@[ext]
 structure CfgN : Type extends Cfg tm where
   /-- Tape position of the r/w head relative to the starting state.
   If this is positive, the initial "center" of the tape is to the left of the current head -/
@@ -37,6 +40,12 @@ lemma CfgN.nth_head (c : CfgN tm) : c.nth c.n = c.BiTape.head := by simp [CfgN.n
 
 
 def initCfgN (s : List Symbol) : tm.CfgN := ⟨initCfg tm s, 0⟩
+
+@[simp]
+lemma initCfgN_n (s : List Symbol) : (initCfgN tm s).n = 0 := rfl
+
+@[simp]
+lemma initCfgN_BiTape (s : List Symbol) : (initCfgN tm s).BiTape = BiTape.mk₁ s := rfl
 
 lemma initCfg_compatible_apply (s : List Symbol) :  (initCfgN tm s).toCfg = initCfg tm s := rfl
 
@@ -254,6 +263,10 @@ lemma CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy {c : CfgN tm} {S : Set ℤ} 
     grind [hnone (n + c.n)]
   · grind
 
+lemma CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy' {c : CfgN tm} {S : Set ℤ} (h : c.n = 0) :
+    c.TapeIsSupportedBy S ↔ c.BiTape.IsSupportedBy S := by
+  simp [CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy, h]
+
 /-- `SupportedBy` is monotone -/
 lemma IsSupportedBy_of_subset {c : CfgN tm} {S S' : Set ℤ} (hS : S ⊆ S') :
     c.IsSupportedBy S → c.IsSupportedBy S' := by
@@ -281,12 +294,10 @@ lemma IsSupportedBy_propagate (c : CfgN tm) (n : ℕ) {S : Set ℤ} (hS : c.IsSu
 
 lemma IsSupportedBy_initCfgN (s : List Symbol) :
     (initCfgN tm s).IsSupportedBy (Set.Icc 0 ↑(s.length - 1)) := by
-  constructor
-  · simp [initCfgN]
-  · intro n
-    cases n
-    <;> simp [initCfgN, initCfg, CfgN.nth]
-    grind
+  simp only [CfgN.IsSupportedBy, initCfgN_n, Set.mem_Icc, Std.le_refl, Nat.cast_nonneg, and_self,
+    CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy', initCfgN_BiTape, true_and]
+  refine BiTape.IsSupportedBy_of_subset ?_ (mk₁_IsSupportedBy s)
+  grind
 
 lemma IsSupportedBy_run (s : List Symbol) (n : ℕ) :
     (runN tm n s).IsSupportedBy (Set.Icc (-n) ↑(max n (s.length - 1))) := by
@@ -323,6 +334,85 @@ lemma stepN_update_BiTape_iff {c₁ c₂ : tm.CfgN} {S : Set ℤ}
     simpa [CfgN.nth, hpos] using BiTape.ext_nth_SupportedBy hs₁ hs₂
   simp [← this, stepN.nth_update, ← imp_iff_not_or]
   grind [hc₁.1]
+
+--set_option profiler true
+--set_option trace.profiler true
+
+omit [Inhabited Symbol] in
+lemma zip_Idx_iff (tm : SingleTapeTM (Option Symbol)) (inst : List Symbol) (c : tm.CfgN) :
+    (∀ (s : Symbol) (n : ℕ), (s, n) ∈ inst.zipIdx → c.nth n = some (some s))
+    ↔
+    (∀ (n : ℤ), 0 ≤ n → n < inst.length → c.nth n = some (inst[n.toNat]?)) := by
+  grind
+
+lemma index_partition {Q I C : ℕ} (h : I + 1 + C ≤ Q) :
+    Set.Icc (α := ℤ) (-Q) Q
+    = Set.Ico (α := ℤ) 0 I
+      ∪ Set.Icc (α := ℤ) I I
+      ∪ Set.Ico (α := ℤ) (I + 1) (I + C + 1)
+      ∪ Set.Ico (α := ℤ) (-Q) 0
+      ∪ Set.Icc (I + C + 1) Q := by
+  grind
+
+omit [Inhabited Symbol] in
+lemma initCfgN_iff (tm : SingleTapeTM (Option Symbol)) (inst : List Symbol) {C Q : ℕ} {c : tm.CfgN}
+    (h : inst.length + 1 + C ≤ Q) (hs : c.IsSupportedBy (Set.Icc (-Q) Q)) :
+    (∃ cert, cert.length = C ∧ c = tm.initCfgN (List.combine inst cert))
+    ↔
+    c.n = 0
+    ∧ c.state = some tm.q₀
+    ∧ (∀ (s : Symbol) (n : ℕ), (s, n) ∈ inst.zipIdx → c.nth n = some (some s))
+    ∧ c.nth inst.length = some none
+    ∧ (∀ (n : ℤ), inst.length + 1 ≤ n → n < inst.length + C + 1 → (c.nth n).join ≠ none)
+    ∧ (∀ (n : ℤ), -↑Q ≤ n ∧ n < 0 ∨ inst.length + C + 1 ≤ n ∧ n < Q + 1 → c.nth n = none)
+  := by
+  constructor
+  · intro ⟨cert, hlen, heq⟩
+    simp only [CfgN.ext_iff, initCfgN, initCfg_state, initCfg_BiTape] at heq
+    grind [List.combine]
+  · rintro ⟨hpos, hstate, hinst, hsep, hcert, hnone⟩
+    let indices := Int.range (inst.length + 1) (inst.length + C + 1)
+    have : ∀ n, n ∈ indices → (c.nth n ).join.isSome := by
+      intro n
+      specialize hcert n
+      grind [Int.mem_range_iff, Option.ne_none_iff_isSome]
+    let cert := indices.pmap (fun n h => (c.nth n).join.get h) this
+    have hlen : cert.length = C := by simp [cert, indices, Int.range]
+    use cert
+    constructor
+    · exact hlen
+    · rw [CfgN.ext_iff]
+      simp only [hstate, initCfgN, initCfg_state, initCfg_BiTape, hpos, and_true, true_and]
+      refine (BiTape.ext_nth_SupportedBy (S := Set.Icc (-Q) Q) ?_ ?_).mp ?_
+      · rw [← CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy' _ hpos]
+        exact hs.right
+      · refine BiTape.IsSupportedBy_of_subset ?_ (mk₁_IsSupportedBy (List.combine inst cert))
+        simp [List.combine]
+        grind
+      · intro n hn
+        rw [show c.BiTape.nth n = c.nth n by simp [CfgN.nth, hpos]]
+        simp only [index_partition h, Set.mem_union, or_assoc] at hn
+        obtain (h | h | h | h | h) := hn
+        · rw [zip_Idx_iff] at hinst
+          specialize hinst n h.1 h.2
+          grind [List.combine]
+        · grind [List.combine]
+        · specialize hcert n h.1 h.2
+          let m := n.toNat
+          have : n = m := by grind
+          grind [Int.range, List.combine]
+        all_goals
+          simp [CfgN.nth, hpos] at hnone
+          grind [List.combine]
+
+/-
+(∃ c, c.length = C ∧ recoverCfgN a Q 0 = tm.initCfgN (inst.combine c)) ↔
+  (((((recoverCfgN a Q 0).n = 0 ∧ (recoverCfgN a Q 0).state = some tm.q₀) ∧
+          ∀ (a_1 : Symbol) (b : ℕ), (a_1, b) ∈ inst.zipIdx → (recoverCfgN a Q 0).nth ↑b = some (some a_1)) ∧
+        (recoverCfgN a Q 0).nth ↑inst.length = some none) ∧
+      ∀ (x : ℤ), ↑inst.length + 1 ≤ x → x < ↑inst.length + ↑C + 1 → (recoverCfgN a Q 0).nth x ∈ instanceSymbols) ∧
+    ∀ (x : ℤ), -↑Q ≤ x ∧ x < 0 ∨ ↑inst.length + ↑C + 1 ≤ x ∧ x < ↑Q + 1 → (recoverCfgN a Q 0).nth x = none
+-/
 
 end SingleTapeTM
 end Turing

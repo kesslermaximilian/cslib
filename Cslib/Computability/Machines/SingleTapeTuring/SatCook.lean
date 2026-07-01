@@ -248,7 +248,7 @@ def InitBlank : CNF (VarIndex tm) :=
 
 /-- At time `0`, the state is correctly initialized -/
 def InitState : CNF (VarIndex tm) :=
-  ⟨⟨[[(VarIndex.state 0 0 (some default), true)]]⟩⟩
+  ⟨⟨[[(VarIndex.state 0 0 (some tm.q₀), true)]]⟩⟩
 
 /-- At time `0`, the tape and state are correctly initialized -/
 def Init : CNF (VarIndex tm) :=
@@ -567,8 +567,6 @@ lemma recoverCfgN_SupportedBy {a : VarIndex tm → Bool} (Q : ℕ) (hS : IsSuita
   · simp_rw [← recoverCfgN_tape_spec hS]
     grind [Int.mem_range_iff, hS.tape_normalized]
 
-
-
 lemma stepN_qn_iff_Propagate₁ (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) (t : ℕ)
     (hn : (recoverCfgN a Q t).n ∈ Set.Icc (α := ℤ) (-(Q - 1)) (Q - 1))
     :
@@ -592,6 +590,32 @@ lemma stepN_BiTape_iff_Propagate (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSu
   have (n : ℤ) : n ∈ Int.range (-Q) (Q + 1) ↔ n ∈ Set.Icc (α := ℤ) (-Q) Q := by
     grind [Int.mem_range_iff]
   simp [tapeIndices, this, hlem]
+
+
+
+
+lemma Int.mem_range_Set (a b n : ℤ) :
+    n ∈ Int.range a b ↔ n ∈ Set.Icc a (b - 1) := by
+  grind [Int.mem_range_iff]
+
+
+lemma initCfgN_iff_Init (a : VarIndex tm → Bool) {Q C : ℕ} (hs : IsSuitable a Q)
+    (inst : List Symbol) (hQ : inst.length + 1 + C ≤ Q) :
+    (∃ c : List Symbol, c.length = C ∧ (recoverCfgN a Q 0) = tm.initCfgN (List.combine inst c))
+    ↔ CNF.Sat a (Encoding.Init tm Q C inst) := by
+  simp [Encoding.Init, InitState, CNF.Sat, InitInstance, InitSeparator, InitCertificate, InitBlank]
+  simp [CNF.eval, recoverCfgN_tape_spec hs, recoverCfgN_state_spec hs, CNF.Clause.eval]
+  --simp [SingleTapeTM.CfgN.ext_iff, SingleTapeTM.initCfgN]
+  simp [certificateIndices, blankIndices]
+  simp [Int.mem_range_iff]
+  
+
+
+
+
+  --simp [BiTape.ext_nth_iff]
+  sorry
+
 
 /-- Normalize a truth assignment by setting correct dummy values for variables not occurring in the
 `TMSAT`.

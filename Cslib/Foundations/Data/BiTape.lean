@@ -240,6 +240,21 @@ lemma mk₁_nth_int (l : List Symbol) (n : ℕ) :
   cases l
   <;> simp [mk₁, nth, nil]
 
+@[grind =]
+lemma mk₁_nth_neg (l : List Symbol) (n : ℤ) (h : n < 0) :
+    (BiTape.mk₁ l).nth n = none := by
+  let m := (-n - 1).toNat
+  have : n = Int.negSucc m := by grind
+  simp [this]
+
+@[grind =]
+lemma mk₁_nth_pos (l : List Symbol) (n : ℤ) (h : 0 ≤ n) :
+    (BiTape.mk₁ l).nth n = l[n.toNat]? := by
+  let m := n.toNat
+  have : n = m := by grind
+  simp [this]
+
+
 def mk₃ {a b : ℤ} (f : ∀ n ∈ Int.range a b, Option Symbol) : BiTape Symbol :=
   let f' : ℤ → Option Symbol := fun n ↦ if h : n ∈ Int.range a b then f n h else none
   {
@@ -271,6 +286,10 @@ lemma mk₃_nth {a b : ℤ} (f : ∀ n ∈ Int.range a b, Option Symbol) (n : �
 def IsSupportedBy (T : BiTape Symbol) (S : Set ℤ) : Prop :=
   ∀ n ∉ S, T.nth n = none
 
+lemma IsSupportedBy_of_subset {T : BiTape Symbol} {S₁ S₂ : Set ℤ} (h : S₁ ⊆ S₂) :
+    T.IsSupportedBy S₁ → T.IsSupportedBy S₂ := by
+  grind [IsSupportedBy]
+
 /- Two BiTapes are equal if their `n`th tape symbols agree on a support set. -/
 theorem ext_nth_SupportedBy {T₁ T₂ : BiTape Symbol} {S : Set ℤ} (h₁ : T₁.IsSupportedBy S)
     (h₂ : T₂.IsSupportedBy S) :
@@ -284,6 +303,14 @@ theorem ext_nth_SupportedBy {T₁ T₂ : BiTape Symbol} {S : Set ℤ} (h₁ : T�
     · rw [h₁ n hn, h₂ n hn]
   · intro h
     simp [h]
+
+lemma mk₁_IsSupportedBy (l : List Symbol) :
+    (BiTape.mk₁ l).IsSupportedBy (Set.Icc 0 (↑l.length - 1)) := by
+  intro n
+  cases n
+  · simp
+    grind
+  · simp
 
 end Nth
 
