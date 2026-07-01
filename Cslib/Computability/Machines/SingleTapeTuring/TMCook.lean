@@ -45,6 +45,9 @@ def initCfgN (s : List Symbol) : tm.CfgN := ⟨initCfg tm s, 0⟩
 lemma initCfgN_n (s : List Symbol) : (initCfgN tm s).n = 0 := rfl
 
 @[simp]
+lemma initCfgN_state (s : List Symbol) : (initCfgN tm s).state = tm.q₀ := rfl
+
+@[simp]
 lemma initCfgN_BiTape (s : List Symbol) : (initCfgN tm s).BiTape = BiTape.mk₁ s := rfl
 
 lemma initCfg_compatible_apply (s : List Symbol) :  (initCfgN tm s).toCfg = initCfg tm s := rfl
@@ -335,8 +338,6 @@ lemma stepN_update_BiTape_iff {c₁ c₂ : tm.CfgN} {S : Set ℤ}
   simp [← this, stepN.nth_update, ← imp_iff_not_or]
   grind [hc₁.1]
 
---set_option profiler true
---set_option trace.profiler true
 
 omit [Inhabited Symbol] in
 lemma zip_Idx_iff (tm : SingleTapeTM (Option Symbol)) (inst : List Symbol) (c : tm.CfgN) :
@@ -409,14 +410,6 @@ lemma initCfgN_iff (tm : SingleTapeTM (Option Symbol)) (inst : List Symbol) {C Q
           simp [CfgN.nth, hpos] at hnone
           grind [List.combine]
 
-/-
-(∃ c, c.length = C ∧ recoverCfgN a Q 0 = tm.initCfgN (inst.combine c)) ↔
-  (((((recoverCfgN a Q 0).n = 0 ∧ (recoverCfgN a Q 0).state = some tm.q₀) ∧
-          ∀ (a_1 : Symbol) (b : ℕ), (a_1, b) ∈ inst.zipIdx → (recoverCfgN a Q 0).nth ↑b = some (some a_1)) ∧
-        (recoverCfgN a Q 0).nth ↑inst.length = some none) ∧
-      ∀ (x : ℤ), ↑inst.length + 1 ≤ x → x < ↑inst.length + ↑C + 1 → (recoverCfgN a Q 0).nth x ∈ instanceSymbols) ∧
-    ∀ (x : ℤ), -↑Q ≤ x ∧ x < 0 ∨ ↑inst.length + ↑C + 1 ≤ x ∧ x < ↑Q + 1 → (recoverCfgN a Q 0).nth x = none
--/
 
 end SingleTapeTM
 end Turing

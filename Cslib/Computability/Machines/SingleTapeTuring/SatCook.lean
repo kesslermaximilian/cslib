@@ -88,6 +88,11 @@ lemma symbols.complete (a : (Option (Option Symbol))) : a ∈ symbols := by
   | some none => simp [symbols, inputSymbols]
   | some (some s) => simp [symbols, inputSymbols, instanceSymbols, Fintype.complete]
 
+lemma mem_instanceSymbols (a : Option (Option Symbol)) :
+    a ∈ instanceSymbols ↔ a.join ≠ none := by
+  simp [instanceSymbols, Option.join, Option.ne_none_iff_exists, Fintype.complete]
+  tauto
+
 -- In addition, let us fix a turing machine `Symbol ∪ {#₀}`
 variable (tm : SingleTapeTM (Option Symbol))
 
@@ -592,11 +597,9 @@ lemma stepN_BiTape_iff_Propagate (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSu
   simp [tapeIndices, this, hlem]
 
 
-
-
-lemma Int.mem_range_Set (a b n : ℤ) :
-    n ∈ Int.range a b ↔ n ∈ Set.Icc a (b - 1) := by
-  grind [Int.mem_range_iff]
+--lemma Int.mem_range_Set (a b n : ℤ) :
+--    n ∈ Int.range a b ↔ n ∈ Set.Icc a (b - 1) := by
+--  grind [Int.mem_range_iff]
 
 
 lemma initCfgN_iff_Init (a : VarIndex tm → Bool) {Q C : ℕ} (hs : IsSuitable a Q)
@@ -604,17 +607,9 @@ lemma initCfgN_iff_Init (a : VarIndex tm → Bool) {Q C : ℕ} (hs : IsSuitable 
     (∃ c : List Symbol, c.length = C ∧ (recoverCfgN a Q 0) = tm.initCfgN (List.combine inst c))
     ↔ CNF.Sat a (Encoding.Init tm Q C inst) := by
   simp [Encoding.Init, InitState, CNF.Sat, InitInstance, InitSeparator, InitCertificate, InitBlank]
-  simp [CNF.eval, recoverCfgN_tape_spec hs, recoverCfgN_state_spec hs, CNF.Clause.eval]
-  --simp [SingleTapeTM.CfgN.ext_iff, SingleTapeTM.initCfgN]
-  simp [certificateIndices, blankIndices]
-  simp [Int.mem_range_iff]
-  
-
-
-
-
-  --simp [BiTape.ext_nth_iff]
-  sorry
+  simp [CNF.eval, recoverCfgN_tape_spec hs, recoverCfgN_state_spec hs, CNF.Clause.eval,
+    certificateIndices, blankIndices, Int.mem_range_iff, mem_instanceSymbols]
+  grind [SingleTapeTM.initCfgN_iff tm inst hQ (recoverCfgN_SupportedBy Q hs 0)]
 
 
 /-- Normalize a truth assignment by setting correct dummy values for variables not occurring in the
