@@ -611,6 +611,15 @@ lemma initCfgN_iff_Init (a : VarIndex tm → Bool) {Q C : ℕ} (hs : IsSuitable 
     certificateIndices, blankIndices, Int.mem_range_iff, mem_instanceSymbols]
   grind [SingleTapeTM.initCfgN_iff tm inst hQ (recoverCfgN_SupportedBy Q hs 0)]
 
+lemma haltCfg_Iff_Output (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) (accept : Symbol)
+    (hstop : (recoverCfgN a Q Q).state = none) :
+    (recoverCfgN a Q Q).toCfg = SingleTapeTM.haltCfg tm [accept]
+    ↔ CNF.Sat a (Encoding.Output tm Q accept) := by
+  simp [CNF.Sat, Output, Output₀, Output₁]
+  simp [CNF.eval, recoverCfgN_tape_spec hs, recoverCfgN_state_spec' hs,
+    SingleTapeTM.Cfg.ext_iff, hstop, tapeIndices, Int.mem_range_iff]
+  grind [SingleTapeTM.haltCfgN_iff accept (recoverCfgN_SupportedBy Q hs Q)]
+
 
 /-- Normalize a truth assignment by setting correct dummy values for variables not occurring in the
 `TMSAT`.

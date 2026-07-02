@@ -126,7 +126,7 @@ lemma runN_zero (s : List Symbol) :
     tm.runN 0 s = tm.initCfgN s := rfl
 
 def OutputsInTimeN (n : ℕ) (s s' : List Symbol) :=
-  (runN tm n s).state = none ∧ extractOutput (runN tm n s).toCfg = s'
+  (runN tm n s).toCfg = haltCfg tm s'
 
 theorem output_iff_aux₁ (s s' : List Symbol) (n : ℕ) :
     Nonempty (OutputsInTime tm n s s') → OutputsInTimeN tm n s s' := by
@@ -147,17 +147,17 @@ theorem output_iff_aux₁ (s s' : List Symbol) (n : ℕ) :
 
 theorem output_iff_aux₂ (s s' : List Symbol) (n : ℕ) :
     OutputsInTimeN tm n s s' → Nonempty (OutputsInTime tm n s s') := by
-  intro ⟨hstop, hout⟩
+  intro hout
   apply Nonempty.intro
   apply OutputsInTime.of_RelatesInSteps
-  have hnone : ∃ m, (tm.runN m s).state = none := ⟨n, hstop⟩
-  have hle : Nat.find hnone ≤ n := Nat.find_min' _ hstop
+  have hnone : ∃ m, (tm.runN m s).state = none := ⟨n, by rw [hout]; rfl⟩
+  have hle : Nat.find hnone ≤ n := Nat.find_min' _ (by rw [hout]; rfl)
   refine ⟨Nat.find hnone, hle, ?_⟩
   rw [TransitionRelation.eq_lambda, Relation.RelatesInSteps.function_Option_iff tm.step,
     ← initCfg_compatible_apply, ← step.compatible_apply_iterate]
   · obtain ⟨k, hn⟩ := Nat.exists_eq_add_of_le' hle
     rw [← stepN.fixed_iterate_apply tm (tm.stepN^[Nat.find hnone] (tm.initCfgN s)) k]
-    · rw [← Function.iterate_add_apply, ← hn, ← runN, haltCfg_of_extractOutput hout]
+    · rw [← Function.iterate_add_apply, ← hn, ← runN, hout]
     · exact Nat.find_spec hnone
   · have hne0 : Nat.find hnone ≠ 0 := by
       intro h
@@ -409,6 +409,25 @@ lemma initCfgN_iff (tm : SingleTapeTM (Option Symbol)) (inst : List Symbol) {C Q
         all_goals
           simp [CfgN.nth, hpos] at hnone
           grind [List.combine]
+
+omit [Inhabited Symbol] in
+lemma haltCfgN_iff {tm : SingleTapeTM (Option Symbol)} {Q : ℕ} {c : tm.CfgN} (accept : Symbol)
+    (hs : c.IsSupportedBy (Set.Icc (-Q) Q)) :
+    c.BiTape = mk₁ [some accept]
+    ↔
+    (∀ n ∈ Set.Icc (α := ℤ) (-Q) Q, c.n = n →  c.nth n = (some (some accept)))
+    ∧ (∀ n ∈ Set.Icc (α := ℤ) (-Q) Q, ∀ m ∈ Set.Icc (α := ℤ) (-Q) Q,
+      n ≠ m → c.n = n → c.nth m = none) := by
+  have hext : c.BiTape = mk₁ [some accept]
+    ↔ ∀ n ∈ Set.Icc (α := ℤ) (-Q) Q, c.nth n = (mk₁ [some accept]).nth (n - c.n) := by
+    have := BiTape.ext_nth_SupportedBy
+      (CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy.mp hs.right)
+      (T₂ := mk₁ [some accept]) (by
+      refine BiTape.IsSupportedBy_of_subset ?_ (BiTape.mk₁_IsSupportedBy _)
+      grind [hs.left]
+      )
+    grind
+  grind [hs.left]
 
 
 end SingleTapeTM

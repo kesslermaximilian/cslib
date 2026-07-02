@@ -126,6 +126,7 @@ The configurations of a Turing machine consist of:
 an `Option`al state (or none for the halting state),
 and a `BiTape` representing the tape contents.
 -/
+@[ext]
 structure Cfg : Type where
   /-- the state of the TM (or none for the halting state) -/
   state : Option tm.State
