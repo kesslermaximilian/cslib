@@ -41,6 +41,16 @@ lemma CNF.clauses_flatten {α β : Type*} (fs : List (CNF α)) :
     simp [CNF.flatten, CNF.append]
     sorry
 
+@[simp]
+lemma CNF.SAT_apend {α : Type*} (f₁ f₂ : CNF α) (a : α → Bool) :
+    CNF.Sat a (f₁ ++ f₂) ↔ CNF.Sat a f₁ ∧ CNF.Sat a f₂ := by
+  simp [CNF.Sat]
+
+@[simp]
+lemma CNF.SAT_flatten {α : Type*} (fs : List (CNF α)) (a : α → Bool) :
+    CNF.Sat a (CNF.flatten fs) ↔ ∀ f ∈ fs, CNF.Sat a f := by
+  simp [CNF.Sat]
+
 
 end Std.Sat
 
@@ -584,7 +594,7 @@ lemma stepN_qn_iff_Propagate₁ (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSui
     CNF.eval]
   grind
 
-lemma stepN_BiTape_iff_Propagate (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) (t : ℕ)
+lemma stepN_BiTape_iff_Propagate₀ (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) (t : ℕ)
     (hstep_n : (recoverCfgN a Q (t + 1)).n = (tm.stepN (recoverCfgN a Q t)).n) :
     (tm.stepN (recoverCfgN a Q t)).BiTape = (recoverCfgN a Q (t + 1)).BiTape
     ↔ CNF.Sat a (Encoding.Propagate₀ tm Q t) := by
@@ -596,11 +606,13 @@ lemma stepN_BiTape_iff_Propagate (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSu
     grind [Int.mem_range_iff]
   simp [tapeIndices, this, hlem]
 
-
---lemma Int.mem_range_Set (a b n : ℤ) :
---    n ∈ Int.range a b ↔ n ∈ Set.Icc a (b - 1) := by
---  grind [Int.mem_range_iff]
-
+lemma stepN_iff_Propagate₀₁ (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) (t : ℕ)
+    (hn : (recoverCfgN a Q t).n ∈ Set.Icc (α := ℤ) (-(Q - 1)) (Q - 1))
+      :
+    (tm.stepN (recoverCfgN a Q t)) = (recoverCfgN a Q (t + 1))
+    ↔ CNF.Sat a (Encoding.Propagate₀ tm Q t) ∧ CNF.Sat a (Encoding.Propagate₁ tm Q t) := by
+  rw [SingleTapeTM.CfgN.ext_iff]
+  grind [stepN_BiTape_iff_Propagate₀ a hs t, stepN_qn_iff_Propagate₁ _ hs _ hn]
 
 lemma initCfgN_iff_Init (a : VarIndex tm → Bool) {Q C : ℕ} (hs : IsSuitable a Q)
     (inst : List Symbol) (hQ : inst.length + 1 + C ≤ Q) :
@@ -619,6 +631,35 @@ lemma haltCfg_Iff_Output (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a
   simp [CNF.eval, recoverCfgN_tape_spec hs, recoverCfgN_state_spec' hs,
     SingleTapeTM.Cfg.ext_iff, hstop, tapeIndices, Int.mem_range_iff]
   grind [SingleTapeTM.haltCfgN_iff accept (recoverCfgN_SupportedBy Q hs Q)]
+
+lemma run_iff_Init_and_Propagate (a : VarIndex tm → Bool) {Q C : ℕ} (hs : IsSuitable a Q)
+    (inst : List Symbol) (hQ : inst.length + 1 + C ≤ Q) :
+    (∃ (c : List Symbol), c.length = C ∧ ∀ t ≤ Q,
+      (recoverCfgN a Q t) = tm.runN t (List.combine inst c))
+    ↔ CNF.Sat a (Encoding.Init tm Q C inst ++ Encoding.Propagate tm Q) := by
+  simp only [Propagate, CNF.SAT_apend, CNF.SAT_flatten, List.mem_map, List.mem_range,
+    forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, ← initCfgN_iff_Init a hs inst hQ]
+  constructor
+  · rintro ⟨c, hlen, h⟩
+    constructor
+    · exact ⟨c, hlen, h 0 (by simp)⟩
+    · intro t ht
+      rw [← stepN_iff_Propagate₀₁ _ hs]
+      · simp [h t (Nat.le_of_succ_le ht), h (t + 1) (by exact Order.add_one_le_iff.mpr ht),
+          SingleTapeTM.runN, Function.iterate_succ_apply']
+      · grind [SingleTapeTM.runN_pos tm (inst.combine c) t]
+  · rintro ⟨⟨c, hlen, hinit⟩, hprop⟩
+    refine ⟨c, hlen, ?_⟩
+    intro t ht
+    induction t with
+    | zero => exact hinit
+    | succ t ih =>
+      specialize hprop t (Nat.lt_of_lt_of_eq ht rfl)
+      specialize ih (Nat.le_of_succ_le ht)
+      rw [←stepN_iff_Propagate₀₁ _ hs] at hprop
+      · rw [← hprop, ih]
+        simp [SingleTapeTM.runN, Function.iterate_succ_apply']
+      · grind [SingleTapeTM.runN_pos tm (inst.combine c) t]
 
 
 /-- Normalize a truth assignment by setting correct dummy values for variables not occurring in the

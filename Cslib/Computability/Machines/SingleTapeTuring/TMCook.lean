@@ -307,6 +307,10 @@ lemma IsSupportedBy_run (s : List Symbol) (n : ℕ) :
   refine IsSupportedBy_of_subset _ ?_ (IsSupportedBy_propagate _ _ n (IsSupportedBy_initCfgN tm s))
   grind [initCfgN]
 
+lemma runN_pos (s : List Symbol) (n : ℕ) :
+    (runN tm n s).n ∈ Set.Icc (α := ℤ) (-n) n := by
+  grind [initCfgN_n, runN, stepN.pos_bound tm (tm.initCfgN s) n]
+
 lemma stepN_update_pos_state_iff (c₁ c₂ : tm.CfgN) {S : Set ℤ} (h : c₁.n ∈ S) :
     (tm.stepN c₁).n = c₂.n ∧ (tm.stepN c₁).state = c₂.state ↔
     ∀ (n : S) (s : Option tm.State) (x : (Option Symbol)),
