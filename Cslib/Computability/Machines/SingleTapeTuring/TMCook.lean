@@ -35,6 +35,16 @@ That is, tape index `0` will always refer to the cell on the tape where the r/w 
 the head: The _tape index_ is invariant with respect to the r/w head moving. -/
 abbrev CfgN.nth (c : CfgN tm) (n : ℤ) : Option Symbol := c.BiTape.nth (n - c.n)
 
+lemma CfgN.ext_iff_nth {c₁ c₂ : CfgN tm} :
+    c₁ = c₂ ↔ (∀ n, c₁.nth n = c₂.nth n) ∧ c₁.n = c₂.n ∧ c₁.state = c₂.state := by
+  rw [CfgN.ext_iff, BiTape.ext_nth_iff]
+  unfold CfgN.nth
+  constructor
+  · rintro ⟨hstate, hnth, hn⟩
+    exact ⟨fun n => by simpa [hn] using hnth (n - c₁.n), hn, hstate⟩
+  · rintro ⟨hnth, hn, hstate⟩
+    exact ⟨hstate, fun n => by simpa [hn] using hnth (n + c₁.n), hn⟩
+
 @[simp, grind =]
 lemma CfgN.nth_head (c : CfgN tm) : c.nth c.n = c.BiTape.head := by simp [CfgN.nth]
 
@@ -128,6 +138,7 @@ lemma runN_zero (s : List Symbol) :
 def OutputsInTimeN (n : ℕ) (s s' : List Symbol) :=
   (runN tm n s).toCfg = haltCfg tm s'
 
+
 theorem output_iff_aux₁ (s s' : List Symbol) (n : ℕ) :
     Nonempty (OutputsInTime tm n s s') → OutputsInTimeN tm n s s' := by
   intro ⟨hout⟩
@@ -170,6 +181,18 @@ theorem output_ff (s s' : List Symbol) (n : ℕ) :
     OutputsInTimeN tm n s s' ↔ Nonempty (OutputsInTime tm n s s') :=
   ⟨output_iff_aux₂ _ _ _ _, output_iff_aux₁ _ _ _ _⟩
 
+
+def HaltsInTimeN (n : ℕ) (s : List Symbol) :=
+  (runN tm n s).state = none
+
+theorem runN_const_ofHaltsInTimeN {n : ℕ} {s : List Symbol} (h : tm.HaltsInTimeN n s) (t : ℕ) :
+    tm.runN t s = tm.runN (min t n) s := by
+  by_cases ht : t ≤ n
+  · simp [ht]
+  · have : t = (t - n) + n := by grind
+    rw [Nat.min_eq_right (Nat.le_of_not_le ht), runN, this, Function.iterate_add_apply,
+      stepN.fixed_iterate_apply _ (tm.stepN^[n] (tm.initCfgN s)) _ h]
+    rfl
 
 -- Properties of stepN
 section CfgN
@@ -270,6 +293,7 @@ lemma CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy' {c : CfgN tm} {S : Set ℤ}
     c.TapeIsSupportedBy S ↔ c.BiTape.IsSupportedBy S := by
   simp [CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy, h]
 
+variable {tm} in
 /-- `SupportedBy` is monotone -/
 lemma IsSupportedBy_of_subset {c : CfgN tm} {S S' : Set ℤ} (hS : S ⊆ S') :
     c.IsSupportedBy S → c.IsSupportedBy S' := by
@@ -286,7 +310,7 @@ lemma IsSupportedBy_propagate (c : CfgN tm) (n : ℕ) {S : Set ℤ} (hS : c.IsSu
     ((tm.stepN)^[n] c).IsSupportedBy (S ∪ Set.Icc (c.n - n) (c.n + n)) := by
   induction n with
   | zero =>
-    exact IsSupportedBy_of_subset tm (by simp) hS
+    exact IsSupportedBy_of_subset (by simp) hS
   | succ n ih =>
     constructor
     · grind [stepN.pos_bound tm c (n + 1)]
@@ -304,7 +328,7 @@ lemma IsSupportedBy_initCfgN (s : List Symbol) :
 
 lemma IsSupportedBy_run (s : List Symbol) (n : ℕ) :
     (runN tm n s).IsSupportedBy (Set.Icc (-n) ↑(max n (s.length - 1))) := by
-  refine IsSupportedBy_of_subset _ ?_ (IsSupportedBy_propagate _ _ n (IsSupportedBy_initCfgN tm s))
+  refine IsSupportedBy_of_subset ?_ (IsSupportedBy_propagate _ _ n (IsSupportedBy_initCfgN tm s))
   grind [initCfgN]
 
 lemma runN_pos (s : List Symbol) (n : ℕ) :

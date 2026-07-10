@@ -32,17 +32,9 @@ lemma CNF.eval_flatten {α : Type*} (fs : List (CNF α)) (a : α → Bool) :
   | nil => simp [CNF.flatten]
   | cons f fs ih => simp [CNF.flatten, ih]
 
-@[simp]
-lemma CNF.clauses_flatten {α β : Type*} (fs : List (CNF α)) :
-    (CNF.flatten fs).clauses = Array.flatten ⟨(fs.map (·.clauses))⟩ := by
-  induction fs with
-  | nil => simp [CNF.flatten, empty]
-  | cons f fs ih =>
-    simp [CNF.flatten, CNF.append]
-    sorry
 
 @[simp]
-lemma CNF.SAT_apend {α : Type*} (f₁ f₂ : CNF α) (a : α → Bool) :
+lemma CNF.SAT_append {α : Type*} (f₁ f₂ : CNF α) (a : α → Bool) :
     CNF.Sat a (f₁ ++ f₂) ↔ CNF.Sat a f₁ ∧ CNF.Sat a f₂ := by
   simp [CNF.Sat]
 
@@ -637,7 +629,7 @@ lemma run_iff_Init_and_Propagate (a : VarIndex tm → Bool) {Q C : ℕ} (hs : Is
     (∃ (c : List Symbol), c.length = C ∧ ∀ t ≤ Q,
       (recoverCfgN a Q t) = tm.runN t (List.combine inst c))
     ↔ CNF.Sat a (Encoding.Init tm Q C inst ++ Encoding.Propagate tm Q) := by
-  simp only [Propagate, CNF.SAT_apend, CNF.SAT_flatten, List.mem_map, List.mem_range,
+  simp only [Propagate, CNF.SAT_append, CNF.SAT_flatten, List.mem_map, List.mem_range,
     forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, ← initCfgN_iff_Init a hs inst hQ]
   constructor
   · rintro ⟨c, hlen, h⟩
@@ -698,7 +690,6 @@ lemma normalize_Sat_iff (Q : ℕ) (a : VarIndex tm → Bool) (sat : CNF (VarInde
     dsimp only [TMSAT.mem] at hmem
     simp [normalize, hmem]
 
-@[simp]
 lemma normalize_TMSAT_iff (a : VarIndex tm → Bool) (Q C : ℕ) (inst : List Symbol) (accept : Symbol)
     (hQ : inst.length + 1 + C ≤ Q) :
     CNF.Sat (normalize a Q) (TMSAT tm Q C inst accept) ↔ CNF.Sat a (TMSAT tm Q C inst accept) := by
@@ -718,20 +709,93 @@ lemma normalize_IsSuitable_of_WellDefined (a : VarIndex tm → Bool) (Q : ℕ)
 
 def mkAssignment_aux (states : ℕ → SingleTapeTM.CfgN tm) :
     VarIndex tm → Bool
-  | VarIndex.state t n q => (states t).n = n && (states t).state = q
+  | VarIndex.state t n q => (states t).n = n ∧ (states t).state = q
   | VarIndex.tape t n s => (states t).BiTape.nth (n - (states t).n) = s
 
+variable (tm) in
 def mkAssignment (inst : List (Option Symbol)) :
     VarIndex tm → Bool :=
   mkAssignment_aux (fun t ↦ (tm.runN t inst))
 
 lemma mkAssignment_aux_WellDefined (states : ℕ → SingleTapeTM.CfgN tm) (Q : ℕ)
-    (hs : ∀ t, (states t).n ∈ tapeIndices Q) :
+    (hs : ∀ t ≤ Q, (states t).n ∈ tapeIndices Q) :
     CNF.Sat (mkAssignment_aux states) (WellDefined tm Q) := by
   simp [WellDefined, CNF.sat_def, WellDefined₀]
   simp [SymbolExists, SymbolUnique, StateExists, StateUnique, CNF.eval, CNF.Clause.eval,
     mkAssignment_aux]
   grind
+
+lemma mkAssignment_IsSuitable (l : List (Option Symbol)) (Q : ℕ) (h : tm.HaltsInTimeN Q l)
+    (hl : l.length - 1 ≤ Q) :
+    IsSuitable (mkAssignment tm l) Q := by
+  have hsupp : ∀ t, (tm.runN t l).IsSupportedBy (Set.Icc (-Q) Q) := by
+    intro t
+    rw [SingleTapeTM.runN_const_ofHaltsInTimeN _ h]
+    refine SingleTapeTM.IsSupportedBy_of_subset ?_ (SingleTapeTM.IsSupportedBy_run tm l (min t Q))
+    grind
+  unfold SingleTapeTM.CfgN.IsSupportedBy SingleTapeTM.CfgN.TapeIsSupportedBy at hsupp
+  exact {
+    well_defined := by
+      refine mkAssignment_aux_WellDefined _ Q (fun t => ?_)
+      grind [SingleTapeTM.runN_pos tm l t, tapeIndices, Int.mem_range_iff]
+    state_normalized := by
+      simp [mkAssignment, mkAssignment_aux]
+      grind [Int.mem_range_iff, tapeIndices]
+    tape_normalized := by
+      simp [mkAssignment, mkAssignment_aux]
+      grind [Int.mem_range_iff, tapeIndices]
+    state_eventually_const := by
+      simp [mkAssignment, mkAssignment_aux, SingleTapeTM.runN_const_ofHaltsInTimeN _ h]
+      grind
+    tape_eventually_const := by
+      simp [mkAssignment, mkAssignment_aux, SingleTapeTM.runN_const_ofHaltsInTimeN _ h]
+      grind
+  }
+
+@[simp]
+lemma recoverCfgN_mkAssignment (l : List (Option Symbol)) (Q : ℕ) (h : tm.HaltsInTimeN Q l)
+    (hl : l.length - 1 ≤ Q) :
+    recoverCfgN (mkAssignment tm l) Q t = tm.runN t l := by
+  have hs := mkAssignment_IsSuitable l Q h hl
+  simp [SingleTapeTM.CfgN.ext_iff_nth, ← recoverCfgN_tape_spec hs, ← recoverCfgN_state_spec hs]
+  simp [mkAssignment, mkAssignment_aux]
+
+
+lemma computation_iff_SAT {Q C : ℕ} (inst : List Symbol) (accept : Symbol)
+    (hQ : inst.length + 1 + C ≤ Q)
+    (hHalt : ∀ (c : List Symbol), c.length = C → tm.HaltsInTimeN Q (List.combine inst c)) :
+    (∃ (c : List Symbol), c.length = C
+      ∧ SingleTapeTM.OutputsInTimeN tm Q (List.combine inst c) [accept])
+    ↔ ∃ a, CNF.Sat a (TMSAT tm Q C inst accept) := by
+  constructor
+  · intro ⟨c, hlen, hout⟩
+    specialize hHalt c hlen
+    have hQ' : (inst.combine c).length - 1 ≤ Q := by
+      simp [List.combine]
+      linarith
+    have hS : IsSuitable (mkAssignment tm (List.combine inst c)) Q :=
+      mkAssignment_IsSuitable _ _ hHalt hQ'
+    use (mkAssignment tm (List.combine inst c))
+    simp only [TMSAT, CNF.SAT_append]
+    constructor
+    · rw [and_assoc]
+      constructor
+      · refine mkAssignment_aux_WellDefined _ Q (fun t => ?_)
+        grind [SingleTapeTM.runN_pos tm (List.combine inst c) t, tapeIndices, Int.mem_range_iff]
+      · rw [and_comm, ← CNF.SAT_append, ← run_iff_Init_and_Propagate _ hS _ hQ]
+        exact ⟨c, hlen, fun t ht => recoverCfgN_mkAssignment _ _ hHalt hQ'⟩
+    · rw [← haltCfg_Iff_Output _ hS, recoverCfgN_mkAssignment _ _ hHalt hQ', hout]
+      rw [recoverCfgN_mkAssignment _ _ hHalt hQ', hHalt]
+  · intro ⟨a, ha⟩
+    have hs := normalize_IsSuitable_of_WellDefined a Q (by simp [TMSAT] at ha; grind)
+    rw [← normalize_TMSAT_iff _ _ _ _ _ hQ] at ha
+    obtain ⟨c, hlen, hrun⟩ := (run_iff_Init_and_Propagate (normalize a Q) hs inst hQ).mpr
+      (by simp [TMSAT] at ha ⊢; grind)
+    refine ⟨c, hlen, ?_⟩
+    rw [SingleTapeTM.OutputsInTimeN, ← hrun Q le_rfl, haltCfg_Iff_Output _ hs]
+    · simp [TMSAT] at ha; grind
+    · rw [hrun Q (by rfl)]
+      exact hHalt c hlen
 
 end
 end Cook
