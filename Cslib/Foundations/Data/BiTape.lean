@@ -178,8 +178,8 @@ def nth (T : BiTape Symbol) : ℤ → Option Symbol
 lemma nth_zero (T : BiTape Symbol) :
     T.nth 0 = T.head := rfl
 
+/-- Two BiTapes are equal if their `n`th tape symbol is equal for all `n ∈ ℤ`. -/
 @[ext]
-/- Two BiTapes are equal if their `n`th tape symbol is equal for all `n ∈ ℤ`. -/
 theorem ext_nth (T₁ T₂ : BiTape Symbol) :
     (∀ n, T₁.nth n = T₂.nth n) → T₁ = T₂ := by
   intro h
@@ -208,6 +208,9 @@ lemma moveRight_nth (T : BiTape Symbol) (n : ℤ) :
   conv_rhs =>
     rw [← moveRight_moveLeft T, moveLeft_nth, add_sub_cancel_right]
 
+/-- Describes the positional change of the read/write head when performing this optional move
+as an integer in {-1, 0, 1}.
+Note that `posChange left = - 1`, because we envision the head moving towards negative indices. -/
 def posChange : Option Dir → ℤ
   | some .left => -1
   | some .right => 1
@@ -240,27 +243,29 @@ lemma mk₁_nth_int (l : List Symbol) (n : ℕ) :
   cases l
   <;> simp [mk₁, nth, nil]
 
---@[grind =]
+@[grind =]
 lemma mk₁_nth_neg (l : List Symbol) (n : ℤ) (h : n < 0) :
     (BiTape.mk₁ l).nth n = none := by
   let m := (-n - 1).toNat
   have : n = Int.negSucc m := by grind
   simp [this]
 
---@[grind =]
+@[grind =]
 lemma mk₁_nth_pos (l : List Symbol) (n : ℤ) (h : 0 ≤ n) :
     (BiTape.mk₁ l).nth n = l[n.toNat]? := by
   let m := n.toNat
   have : n = m := by grind
   simp [this]
 
-@[grind =, simp]
 lemma mk₁_nth (l : List Symbol) (n : ℤ) :
     (BiTape.mk₁ l).nth n = if n < 0 then none else l[n.toNat]? := by
   cases n
   <;> simp
 
-
+/-- Construct a BiTape by specifying the symbols from a (finite support) function.
+This means that `(mk₃ f).nth n` is `f n` (wherever `f n` is defined, otherwise `none`),
+see `mk₃_nth` for that statement.
+-/
 def mk₃ {a b : ℤ} (f : ∀ n ∈ Int.range a b, Option Symbol) : BiTape Symbol :=
   let f' : ℤ → Option Symbol := fun n ↦ if h : n ∈ Int.range a b then f n h else none
   {
@@ -310,6 +315,7 @@ theorem ext_nth_SupportedBy {T₁ T₂ : BiTape Symbol} {S : Set ℤ} (h₁ : T�
   · intro h
     simp [h]
 
+/-- The minimal support set of a BiTape constructed using `mk₁`. -/
 lemma mk₁_IsSupportedBy (l : List Symbol) :
     (BiTape.mk₁ l).IsSupportedBy (Set.Icc 0 (↑l.length - 1)) := by
   intro n
