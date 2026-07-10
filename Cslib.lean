@@ -34,6 +34,8 @@ public import Cslib.Computability.Languages.OmegaRegularLanguage
 public import Cslib.Computability.Languages.RegularLanguage
 public import Cslib.Computability.Machines.ComputationModel.Basic
 public import Cslib.Computability.Machines.SingleTapeTuring.Basic
+public import Cslib.Computability.Machines.SingleTapeTuring.SatCook
+public import Cslib.Computability.Machines.SingleTapeTuring.TMCook
 public import Cslib.Computability.URM.Basic
 public import Cslib.Computability.URM.Computable
 public import Cslib.Computability.URM.Defs
