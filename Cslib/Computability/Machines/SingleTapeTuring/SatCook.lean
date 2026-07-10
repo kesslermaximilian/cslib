@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2026 Maximilian Keßler. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Maximilian Keßler
+-/
 module
 
 public import Cslib.Computability.Machines.SingleTapeTuring.Basic
@@ -6,6 +11,12 @@ public import Mathlib.Data.Int.Range
 public import Mathlib.Tactic.Linarith
 public import Std.Sat.CNF
 
+/-!
+
+# SAT-Formulation for the Proof of Cook's Theorem
+
+
+-/
 
 
 namespace Std.Sat
