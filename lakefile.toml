@@ -18,7 +18,12 @@ weak.linter.unicodeLinter = false
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
-rev = "73b2611ac34fe053446b21322ee51d19cb27b3e7"
+rev = "v4.31.0"
+
+[[require]]
+name = "verso-slides"
+git = "https://github.com/leanprover/verso-slides.git"
+rev = "v4.31.0"
 
 [[lean_lib]]
 name = "Cslib"
@@ -31,3 +36,7 @@ leanOptions = {weak.linter.style.header = false}
 name = "checkInitImports"
 srcDir = "scripts"
 root = "CheckInitImports"
+
+[[lean_exe]]
+name = "generate-slides"
+root = "Main" 
