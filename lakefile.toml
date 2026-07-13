@@ -32,6 +32,9 @@ name = "Cslib"
 name = "CslibTests"
 leanOptions = {weak.linter.style.header = false}
 
+[[lean_lib]]
+name = "Slides"
+
 [[lean_exe]]
 name = "checkInitImports"
 srcDir = "scripts"
