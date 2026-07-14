@@ -157,7 +157,8 @@ The initial configuration corresponding to a list in the input alphabet.
 Note that the entries of the tape constructed by `BiTape.mk₁` are all `some` values.
 This is to ensure that distinct lists map to distinct initial configurations.
 -/
-def initCfg (tm : SingleTapeTM Symbol) (s : List Symbol) : tm.Cfg := ⟨some tm.q₀, BiTape.mk₁ s⟩
+def initCfg (tm : SingleTapeTM Symbol) (s : List Symbol) : tm.Cfg :=
+  ⟨some tm.q₀, BiTape.mk₁ s⟩
 
 @[simp]
 lemma initCfg_state (tm : SingleTapeTM Symbol) (s : List Symbol) :
@@ -170,7 +171,8 @@ lemma initCfg_BiTape (tm : SingleTapeTM Symbol) (s : List Symbol) :
 /-- The final configuration corresponding to a list in the output alphabet.
 (We demand that the head halts at the leftmost position of the output.)
 -/
-def haltCfg (tm : SingleTapeTM Symbol) (s : List Symbol) : tm.Cfg := ⟨none, BiTape.mk₁ s⟩
+def haltCfg (tm : SingleTapeTM Symbol) (s : List Symbol) : tm.Cfg :=
+  ⟨none, BiTape.mk₁ s⟩
 
 open Classical in
 /--

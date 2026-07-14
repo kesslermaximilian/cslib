@@ -1,0 +1,17 @@
+.definition {
+  border-left: 4px solid #4f8cff;
+  padding-left: 1em;
+  margin: 1em 0;
+}
+
+.theorem {
+  border-left: 4px solid #d9534f;
+  padding-left: 1em;
+  margin: 1em 0;
+}
+
+.example {
+  border-left: 4px solid #5cb85c;
+  padding-left: 1em;
+  margin: 1em 0;
+}
