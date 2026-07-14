@@ -50,6 +50,14 @@ vertical := some true
 vertical := some true
 %%%
 
+:::class "definition"
+A (single tape) *Turing Machine* over the alphabet $`Γ` is a finite set $`S` of *States*
+together with a transition function
+$$`tr : S → \text{Option $Γ$} → Option Dir × Option Γ ×` Option S
+:::
+
+## Lean definition
+
 ```leanLibCode -panel Cslib.Computability.Machines.SingleTapeTuring.Basic (decl := Turing.SingleTapeTM)
 /--
 A single-tape Turing machine
@@ -123,12 +131,19 @@ def haltCfg (tm : SingleTapeTM Symbol) (s : List Symbol) : tm.Cfg :=
 
 
 # Things of interest
-
-## computable
-A thing is computable iff
-
-### this is a test
+%%%
+vertical := some true
+%%%
 
 :::class "theorem"
 some theorem
+$$`∑_{i = 1}^n i`
 :::
+
+## Test
+
+:::class "definition"
+some definition
+$$`∑`
+:::
+foo
