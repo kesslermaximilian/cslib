@@ -7,6 +7,7 @@
 
 /* Setting up environments */
 
+.example,
 .theorem,
 .definition {
   margin: 1.2em 0;
@@ -49,4 +50,27 @@
   color: #ff8f8f;
   font-weight: 700;
   margin-bottom: 0.45em;
+}
+
+/* ---- Example --- */
+.example {
+  border-left-color: #5cb85c;
+  background: rgba(92, 184, 92, 0.12);
+}
+
+.example strong:first-child {
+  display: block;
+  color: #7fd67f;
+  font-weight: 700;
+  margin-bottom: 0.45em;
+}
+
+.leftalign {
+  text-align: left;
+}
+
+.leftalign ul,
+.leftalign ol {
+  display: inline-block;
+  text-align: left;
 }
