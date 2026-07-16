@@ -20,11 +20,11 @@ Building towards the Cook-Levin theorem
 vertical := some true
 %%%
 
-* Coming up with a _mathematically precise_ definition is not easy.
+* Coming up with a _mathematically precise_ definition is not easy
 * Many different, possible definitions
 * Some questions to answer
 
-## Model of computation
+## Models of computation
 * Turing machines
 * Finite automata
 * Machine-based models
@@ -37,11 +37,11 @@ vertical := some true
 ## Measuring Resources
 * Execution time
 * Space needed for computation
-* Number of communications, queries
+* Number of communications/queries
 * Parallelism
 
 ## In-/Output
-* Mathematical objects of interested need to be _encoded_
+* Mathematical objects of interest need to be _encoded_
 * Different possible ways to deal with Higher-Order functions
 * Typically: Work with computations over alphabets:
   * An _alphabet_ $`Γ` is a finite set (thought of as symbols)
@@ -193,7 +193,7 @@ $`t (|l|)` steps and outputs $`f(l)`.
 A Multitape Turing Machine is defined similar to a (singletape) Turing Machine, except
 that it can work with a fixed finite amount of tapes. In one step of execution, every tape
 can be read and written to, so the transition function becomes
-$$`\text{tr} : S × \underbrace{(Γ ∪ \{␣\})^n}_{\text{read}} → \underbrace{\{-1, 0, 1\}}_{\text{move}} × \underbrace{(Γ ∪ \{␣\})^n}_{\text{write}} × \underbrace{(S ∪ \{\text{HALT}\})}_{\text{new state}}.`
+$$`\text{tr} : S × \underbrace{(Γ ∪ \{␣\})^n}_{\text{read}} → \underbrace{\{-1, 0, 1\}^n}_{\text{move}} × \underbrace{(Γ ∪ \{␣\})^n}_{\text{write}} × \underbrace{(S ∪ \{\text{HALT}\})}_{\text{new state}}.`
 :::
 
 ## Lean formalisation
@@ -277,10 +277,10 @@ vertical := some true
 %%%
 
 * Suppose we are given a language $`L ⊆ Σ^*` that is in `NP`. We need to
-* Proof that `SAT` is a problem `NP`
+* Prove that `SAT` is a problem `NP`
 * Specify the transformation function $`f : L → \text{SAT}`
-* Proof that $`f` is a transformation, i.e. preserves membership
-* Proof that $`f` is computable in polynomial time
+* Prove that $`f` is a transformation, i.e. preserves membership
+* Prove that $`f` is computable in polynomial time
 
 ## Challenges in formalisation
 * Specifying $`f` and proving that it is a transformation: doable (~2000 LOC)
@@ -371,6 +371,6 @@ structure OutputsInTime (t : τ) (n : ℕ) (l : List Γᵢ) (l' : List Γₒ) wh
 # Slides / Resources
 * Slides available at [maximilian-kessler.de/complexity-theory-slides-1](https://maximilian-kessler.de/complexity-theory-slides-1)
 * My fork of CSLib: [git.abstractnonsen.se/max/cslib](https://git.abstractnonsen.se/max/cslib)
-  * Check out the branches (mostly `computation-model-typeclasess`) for my code
+  * Check out the branches (mostly `computation-model-typeclasses`) for my code
   * Code for these slides in branch `talk-1`
 * Follow development / discussions: `#cslib` channel in the leanprover community Zulip
