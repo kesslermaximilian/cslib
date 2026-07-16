@@ -25,12 +25,14 @@ vertical := some true
 * Some questions to answer
 
 ## Model of computation
-* Turing machines, variants thereof
+* Turing machines
 * Finite automata
 * Machine-based models
 * λ-calculus
 * Partially recursive functions
-* General: Determinism of the chosen model
+* General:
+  * Determinism of the chosen model
+  * Many variants of a single definition
 
 ## Measuring Resources
 * Execution time
@@ -79,17 +81,30 @@ $$`w ∈ L ↔ ∃ c, (w, c) ∈ V`
 and $`V` is recognizable in polynomial time wrt $`w`.
 :::
 
+## The class NP
+
+:::class "example"
+*Example (TSP)*
+Let $`L` be the language of weighted graphs that have a tour
+(sequence of edges visiting all vertices) of length at most 1.
+We can consider $`V` to be the language of pairs of graphs and tours $`(G, T)`,
+where $`T` is required to be a tour in $`G` of length at most 1.
+Then we see that $`L` is in `NP`.
+:::
+
 ## Other common complexity classes
 
-* `EXPTIME`, the languages recognizable with exponential time $`O(2^{(P(n)}))`
+* `EXPTIME`, the languages recognizable with exponential time $`O(2^{P(n)})`
 * `NEXPTIME`, the languages recognizable with exponential time non-deterministically
 * `PSPACE`, the languages recognizable with polynomial space
 * `EXPSPACE`, the languages verifiable with polynomial space
 
+:::::fragment
 :::class "theorem"
 *Theorem*
 `P ⊆ NP ⊆ PSPACE ⊆ EXPTIME ⊆ NEXPTIME ⊆ EXPSPACE`
 :::
+:::::
 
 ## Transformations between languages
 
@@ -169,7 +184,7 @@ We say that it *outputs* $`l'` if the tape $`T_n` contains $`l'` on the nonnegat
 (and only blanks elsewhere).
 The machine $`τ` is said to *compute* a function $`f : Γ^* → Γ^*` in time $`t : ℕ → ℕ`
 if for every word $`l ∈ Γ^*`, the computation of $`τ` on input $`l` halts in at most
-$`t ( \operatorname{len} (l))` steps and outputs $`f(l)`.
+$`t (|l|)` steps and outputs $`f(l)`.
 :::
 
 ## Multi-Tape Turing machines
