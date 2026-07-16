@@ -9,8 +9,6 @@ open VersoSlides
 
 Building towards the Cook-Levin theorem
 
-Design choices, Challenges & Current Progress
-
 # What is computability (intuitively)?
 
 * _Computabilty_ means _Solving things using effective procedures_
@@ -53,7 +51,7 @@ vertical := some true
 :::class "definition"
 *Definition (informal)*
 A *Model of Computation* is a model that describes how output to a mathematical function is
-computed giving an input.
+computed given an input.
 It describes the "computation process" and may allow to measure resource consumption such as
 time or space.
 :::
@@ -83,7 +81,7 @@ and $`V` is recognizable in polynomial time wrt $`w`.
 
 ## Other common complexity classes
 
-* `EXPTIME`, the languages recognizable with exponential time $`O(2^(P(n)))`
+* `EXPTIME`, the languages recognizable with exponential time $`O(2^{(P(n)}))`
 * `NEXPTIME`, the languages recognizable with exponential time non-deterministically
 * `PSPACE`, the languages recognizable with polynomial space
 * `EXPSPACE`, the languages verifiable with polynomial space
@@ -142,10 +140,10 @@ vertical := some true
 
 :::class "definition"
 *Definition*
+A *Tape* is a finite support function $`ℤ → Γ ∪ \{␣\}`.
 A (single tape) *Turing Machine* over the alphabet $`Γ` is a finite set $`S` of *States*
 together with a starting state $`q_0 ∈ S` and a transition function
 $$`\text{tr} : S × \underbrace{(Γ ∪ \{␣\})}_{\text{read}} → \underbrace{\{-1, 0, 1\}}_{\text{move}} × \underbrace{(Γ ∪ \{␣\})}_{\text{write}} × \underbrace{(S ∪ \{\text{HALT}\})}_{\text{new state}}.`
-A *Tape* is a finite support function $`ℤ → Γ ∪ \{␣\}`.
 A *Configuration* (of a TM) is a pair of $`s ∈ S ∪ \{\text{HALT}\}` and a tape.
 :::
 
