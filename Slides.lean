@@ -14,7 +14,7 @@ Design choices, Challenges & Current Progress
 # What is computability (intuitively)?
 
 * _Computabilty_ means _Solving things using effective procedures_
-  * _Algorithms_
+  * → Algorithms
 * Anything a "modern-day computer" can solve / compute
 
 # Defining computability
@@ -24,6 +24,7 @@ vertical := some true
 
 * Coming up with a _mathematically precise_ definition is not easy.
 * Many different, possible definitions
+* Some questions to answer
 
 ## Model of computation
 * Turing machines, variants thereof
@@ -31,6 +32,7 @@ vertical := some true
 * Machine-based models
 * λ-calculus
 * Partially recursive functions
+* General: Determinism of the chosen model
 
 ## Measuring Resources
 * Execution time
@@ -40,9 +42,69 @@ vertical := some true
 
 ## In-/Output
 * Mathematical objects of interested need to be _encoded_
-* Typically: Work with computations over alphabets
-  * $`f \colon Γ^* → Γ^*`
 * Different possible ways to deal with Higher-Order functions
+* Typically: Work with computations over alphabets:
+  * An _alphabet_ $`Γ` is a finite set (thought of as symbols)
+  * $`Γ^*` denotes the set of (finite) words consisting of letters in $`Γ`
+  * Study functions $`f \colon Γ^* → Γ^*`
+  * Recognize (i.e. decide membership) _languages_ $`L ⊆ Γ^*`
+
+# Objects of interest
+%%%
+vertical := some true
+%%%
+
+:::class "definition"
+*Definition*
+For a computational model, let `P` be the set of languages $`L ⊆ Γ^*` recognizable
+in polynomial time, i.e. where the membership problem $`w ∈ L` is "computable" in polynomial time.
+This means that there is a polynomial $`p(n)` and a "computer" $`τ` such that $`τ` can decide
+$`w ∈ L` in time $`p(|w|)` for any $`w`, where $`|w|` denotes the length of a word.
+:::
+
+## Objects of interest
+
+:::class "definition"
+*Definition*
+For a computational model, let `NP` be the set of languages $`L ⊆ Γ^*` verifiable in polynomial
+time, i.e. there is a verification language $`V ⊆ L × Γ^*`such that
+$$`w ∈ L ↔ ∃ c, (w, c) ∈ V`
+and $`V` is recognizable in polynomial time wrt $`w`.
+:::
+
+## Other common complexity classes
+
+* `EXPTIME`, the languages recognizable with exponential time $`O(2^(P(n)))`
+* `NEXPTIME`, the languages recognizable with exponential time non-deterministically
+* `PSPACE`, the languages recognizable with polynomial space
+* `EXPSPACE`, the languages verifiable with polynomial space
+
+:::class "theorem"
+*Theorem*
+`P ⊆ NP ⊆ PSPACE ⊆ EXPTIME ⊆ NEXPTIME ⊆ EXPSPACE`
+:::
+
+## Transformations between languages
+
+:::class "definition"
+*Definition*
+We say that the language $`L₁ ⊆ Γ^*` *transforms (polynomially)* to the language $`L₂ ⊆ Σ^*`
+if there is a function $`f : Γ^* → Σ^*` (computable in polynomial time) such that
+$$` w ∈ L₁  ↔ f(w) ∈ L₂`
+:::
+
+## NP-Completeness
+
+:::class "definition"
+*Definition*
+A language $`L` in `NP` is said to be `NP`-complete if every language $`L'` in `NP` transforms
+to $`L` polynomially
+:::
+
+:::class "theorem"
+*Theorem (Cook-Levin)*
+The Boolean Satisfiability Problem `SAT` is an `NP`-complete problem.
+:::
 
 
 # Turing Machines
@@ -51,9 +113,36 @@ vertical := some true
 %%%
 
 :::class "definition"
+*Definition*
 A (single tape) *Turing Machine* over the alphabet $`Γ` is a finite set $`S` of *States*
-together with a transition function
-$$`tr : S → \text{Option $Γ$} → Option Dir × Option Γ ×` Option S
+together with a starting state $`q_0 ∈ S` and a transition function
+$$`\text{tr} : S → \underbrace{(Γ ∪ \{␣\})}_{\text{read}} → \underbrace{\{-1, 0, 1\}}_{\text{move}} × \underbrace{(Γ ∪ \{␣\})}_{\text{write}} × \underbrace{(S ∪ \{\text{HALT}\})}_{\text{new state}}.`
+A *Tape* is a finite support function $`ℤ → Γ ∪ \{␣\}`.
+A *Configuration* (of a TM) is a pair of $`s ∈ S ∪ \{\text{HALT}\}` and a tape.
+:::
+
+## Turing Machines : Computation
+
+:::class "definition"
+*Definition*
+The *Computation* of a Turing Machine $`τ` on input of a word $`l ∈ Γ^*`
+is the sequence $`(c_i)_{i ∈ ℕ}` of configurations defined recursively as follows:
+The starting configuration $`c_0 := (q_0, T_0)` is the pair of
+starting state and a tape initialized with `l` on the nonnegative indices (and blanks on the left/right).
+The state $`c_{n + 1}` is obtained from $`c_n = (q_n, T_n)` as described by
+$$`(m, w, q) := \text{tr}(q_n, (T_n(0))) ∈ \{-1, 0, 1\} × (Γ ∪ \{␣\}) × (S ∪ \{\text{HALT}\}).`
+That is, writing $`w`, shifting indices of $`T_n` by $`m` and transitioning to state $`q`.
+:::
+
+## Turing Machines : Output, computing functions
+:::class "definition"
+*Definition*
+The computation of $`τ` on input $`l` *halts* after $`n` steps if $`q_n = \text{HALT}`.
+We say that it *outputs* $`l'` if the tape $`T_n` contains $`l'` on the nonnegative indices
+(and only blanks elsewhere).
+The machine $`τ` is said to *compute* a function $`f : Γ^* → Γ^*` in time $`t : ℕ → ℕ`
+if for every word $`l ∈ Γ^*`, the computation of $`τ` on input $`l` halts in at most
+$`t ( \operatorname{len} (l))` steps and outputs $`f(l)`.
 :::
 
 ## Lean definition
@@ -128,22 +217,3 @@ def initCfg (tm : SingleTapeTM Symbol) (s : List Symbol) : tm.Cfg :=
 def haltCfg (tm : SingleTapeTM Symbol) (s : List Symbol) : tm.Cfg :=
   ⟨none, BiTape.mk₁ s⟩
 ```
-
-
-# Things of interest
-%%%
-vertical := some true
-%%%
-
-:::class "theorem"
-some theorem
-$$`∑_{i = 1}^n i`
-:::
-
-## Test
-
-:::class "definition"
-some definition
-$$`∑`
-:::
-foo

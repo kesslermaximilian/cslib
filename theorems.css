@@ -1,17 +1,52 @@
-.definition {
-  border-left: 4px solid #4f8cff;
-  padding-left: 1em;
-  margin: 1em 0;
+/* Common style */
+
+.reveal {
+  --r-main-font-size: 35px;
+  /* font-size: 0.5em; */
 }
+
+/* Setting up environments */
+
+.theorem,
+.definition {
+  margin: 1.2em 0;
+  padding: 0.9em 1.1em;
+  border-left: 8px solid;
+  border-radius: 6px;
+
+  /* Dark tinted background */
+  background: rgba(255,255,255,0.06);
+
+  /* Slight separation from the background */
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.05);
+
+  text-align: left;
+}
+
+/* ---------- Definition ---------- */
+
+.definition {
+  border-left-color: #4ea1ff;
+  background: rgba(78,161,255,0.12);
+}
+
+.definition strong:first-child {
+  display: block;
+  color: #79b8ff;
+  font-weight: 700;
+  margin-bottom: 0.45em;
+}
+
+/* ---------- Theorem ---------- */
 
 .theorem {
-  border-left: 4px solid #d9534f;
-  padding-left: 1em;
-  margin: 1em 0;
+  border-left-color: #ff6b6b;
+  background: rgba(255,107,107,0.12);
 }
 
-.example {
-  border-left: 4px solid #5cb85c;
-  padding-left: 1em;
-  margin: 1em 0;
+.theorem strong:first-child {
+  display: block;
+  color: #ff8f8f;
+  font-weight: 700;
+  margin-bottom: 0.45em;
 }

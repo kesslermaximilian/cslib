@@ -9,5 +9,5 @@ def theoremsCss : CssFile where
 
 def main : IO UInt32 :=
   slidesMain
-    (config := { theme := "black", slideNumber := true, transition := "slide", width := 1300, extraCss := #[theoremsCss] })
+    (config := { theme := "dark", slideNumber := true, transition := "slide", width := 1300, extraCss := #[theoremsCss] })
     (doc := %doc Slides)
