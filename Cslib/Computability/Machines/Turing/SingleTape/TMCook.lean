@@ -5,7 +5,8 @@ Authors: Maximilian Keßler
 -/
 module
 
-public import Cslib.Computability.Machines.SingleTapeTuring.Basic
+public import Cslib.Computability.Machines.Turing.SingleTape.Defs
+public import Cslib.Computability.Machines.Turing.SingleTape.Deterministic
 public import Mathlib.Data.Nat.Find
 public import Mathlib.Tactic.Ring
 
@@ -21,6 +22,7 @@ public import Mathlib.Tactic.Ring
 def List.combine {α : Type*} (l₁ : List α) (l₂ : List α) : List (Option α) :=
   l₁.map some ++ [none] ++ l₂.map some
 
+namespace Cslib
 namespace Turing
 namespace SingleTapeTM
 
@@ -76,9 +78,9 @@ lemma initCfg_compatible_apply (s : List Symbol) :  (initCfgN tm s).toCfg = init
 
 open BiTape
 
-lemma posChange_abs_bound (dir : Option Dir) : |posChange dir| ≤ 1 := by
+lemma posChange_abs_bound (dir : Option Turing.Dir) : |posChange dir| ≤ 1 := by
   match dir with
-  | none | some Dir.left | some Dir.right => simp [posChange]; try rfl
+  | none | some Turing.Dir.left | some Turing.Dir.right => simp [posChange]; try rfl
 
 def stepN : tm.CfgN → tm.CfgN
   | ⟨⟨none, t⟩, n⟩ =>
@@ -119,7 +121,8 @@ theorem step.compatible_apply_iterate_aux (c : CfgN tm) (n : ℕ)
     · simp [step.compatible _ _ h, flip]
   | succ n ih =>
     by_cases h : c.state = none
-    · simp [flip, (step.eq_none_iff _ c.toCfg).mpr h, Function.iterate_fixed,
+    · simp [flip, (step.eq_none_iff _ c.toCfg).mpr h,
+        Function.iterate_fixed (f := flip Option.bind tm.step) (x := none) rfl n,
         stepN.fixed_iterate_apply _ _ _ h, h]
     · repeat rw [Function.iterate_succ_apply _ _ (some c.toCfg)]
       rw [flip, Option.bind_eq_bind, Option.bind_some, ← step.compatible _ _ h]
@@ -295,7 +298,7 @@ def CfgN.IsSupportedBy (c : CfgN tm) (S : Set ℤ) : Prop :=
 variable {tm} in
 lemma CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy {c : CfgN tm} {S : Set ℤ} :
     c.TapeIsSupportedBy S ↔ c.BiTape.IsSupportedBy {s - c.n | s ∈ S} := by
-  simp only [CfgN.TapeIsSupportedBy, IsSupportedBy, Set.mem_setOf_eq, not_exists, not_and]
+  simp only [CfgN.TapeIsSupportedBy, IsSupportedBy, Set.mem_ofPred_eq, not_exists, not_and]
   constructor
   · intro hnone n
     grind [hnone (n + c.n)]
@@ -333,8 +336,8 @@ lemma IsSupportedBy_propagate (c : CfgN tm) (n : ℕ) {S : Set ℤ} (hS : c.IsSu
 
 lemma IsSupportedBy_initCfgN (s : List Symbol) :
     (initCfgN tm s).IsSupportedBy (Set.Icc 0 ↑(s.length - 1)) := by
-  simp only [CfgN.IsSupportedBy, initCfgN_n, Set.mem_Icc, Std.le_refl, Nat.cast_nonneg, and_self,
-    CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy', initCfgN_BiTape, true_and]
+  simp only [CfgN.IsSupportedBy, Set.mem_Icc, Std.le_refl, Nat.cast_nonneg, and_self, initCfgN,
+    CfgN_TapeIsSupportedBy_iff_BiTape_SupportedBy', true_and]
   refine BiTape.IsSupportedBy_of_subset ?_ (mk₁_IsSupportedBy s)
   grind
 
@@ -472,3 +475,4 @@ lemma haltCfgN_iff {tm : SingleTapeTM (Option Symbol)} {Q : ℕ} {c : tm.CfgN} (
 
 end SingleTapeTM
 end Turing
+end Cslib

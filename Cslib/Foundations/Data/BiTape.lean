@@ -212,12 +212,12 @@ lemma moveRight_nth (T : BiTape Symbol) (n : ℤ) :
 /-- Describes the positional change of the read/write head when performing this optional move
 as an integer in {-1, 0, 1}.
 Note that `posChange left = - 1`, because we envision the head moving towards negative indices. -/
-def posChange : Option Dir → ℤ
+def posChange : Option Turing.Dir → ℤ
   | some .left => -1
   | some .right => 1
   | none => 0
 
-lemma optionMove_nth (T : BiTape Symbol) (dir : Option Dir) (n : ℤ) :
+lemma optionMove_nth (T : BiTape Symbol) (dir : Option Turing.Dir) (n : ℤ) :
     (T.optionMove dir).nth n = T.nth (n + posChange dir) := by
   match dir with
   | none => simp [optionMove, posChange]

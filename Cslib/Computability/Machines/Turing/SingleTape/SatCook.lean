@@ -5,8 +5,8 @@ Authors: Maximilian Keßler
 -/
 module
 
-public import Cslib.Computability.Machines.SingleTapeTuring.Basic
-public import Cslib.Computability.Machines.SingleTapeTuring.TMCook
+public import Cslib.Computability.Machines.Turing.SingleTape.Defs
+public import Cslib.Computability.Machines.Turing.SingleTape.TMCook
 public import Mathlib.Data.Int.Range
 public import Mathlib.Tactic.Linarith
 public import Std.Sat.CNF
@@ -58,7 +58,7 @@ lemma CNF.SAT_flatten {α : Type*} (fs : List (CNF α)) (a : α → Bool) :
 end Std.Sat
 
 
-
+namespace Cslib
 namespace Turing
 
 namespace Cook
@@ -362,7 +362,8 @@ lemma CNF.Clause.mem_map {α β : Type*} (v : α) (l : List β) (f : β → Lite
 section TMSAT_VarMem
 attribute [local grind =] Int.mem_range_iff
 
-lemma innerTapeIndices_posChange (Q : ℕ) (n : ℤ) (h : n ∈ innerTapeIndices Q) (dir : Option Dir) :
+lemma innerTapeIndices_posChange (Q : ℕ) (n : ℤ) (h : n ∈ innerTapeIndices Q)
+    (dir : Option Turing.Dir) :
     n + posChange dir ∈ tapeIndices Q := by
   grind [SingleTapeTM.posChange_abs_bound dir]
 
@@ -811,3 +812,4 @@ lemma computation_iff_SAT {Q C : ℕ} (inst : List Symbol) (accept : Symbol)
 end
 end Cook
 end Turing
+end Cslib
