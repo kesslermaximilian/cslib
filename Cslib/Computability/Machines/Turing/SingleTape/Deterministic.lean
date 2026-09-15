@@ -529,7 +529,7 @@ def TimeComputable.comp {f g : List Symbol → List Symbol}
         (hg.time_bound (f a).length) hg_outputsFun
     -- Therefore, the computer reduces a to g (f a) in the sum of those times.
     have h_a_reducesTo_g_f_a := RelatesWithinSteps.trans h_a_reducesTo_f_a h_f_a_reducesTo_g_f_a
-    apply RelatesWithinSteps.of_le h_a_reducesTo_g_f_a
+    refine RelatesWithinSteps.mono ?_ h_a_reducesTo_g_f_a
     refine Nat.add_le_add_left ?_ (hf.time_bound a.length)
     · apply h_mono
       -- Use the lemma about output length being bounded by input length + time

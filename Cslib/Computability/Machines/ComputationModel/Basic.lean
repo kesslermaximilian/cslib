@@ -108,7 +108,7 @@ lemma EvalsToInTime.trans (h₁ : EvalsToInTime t a b n₁) (h₂ : EvalsToInTim
 
 theorem EvalsToInTime.of_le (h : EvalsToInTime t a b n₁) (hn : n₁ ≤ n₂) :
     EvalsToInTime t a b n₂ :=
-  Relation.RelatesWithinSteps.of_le h hn
+  Relation.RelatesWithinSteps.mono hn h
 
 
 end TransitionSystem
