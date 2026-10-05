@@ -61,7 +61,7 @@ For each element `(t : τ)`, there is a bundle of a type `cfg t` with a step / t
 `cfg t → Option (cfg t)`.
 -/
 class TransitionSystem (τ : Type u) where
-  cfg (t : τ) : Type*
+  cfg (t : τ) : Type v
   red {t : τ} : cfg t → cfg t → Prop
 
 class SpaceSize (τ : Type u) [TransitionSystem τ] where
@@ -73,7 +73,7 @@ This way, we can think of elements of `τ` as allowing computations `List Γᵢ 
 by lifting inputs into the computation context, iterating the `step` function,
 and taking output from this computation context.
 -/
-class TransitionMachine (τ : Type u) (Γᵢ Γₒ : outParam (Type v)) extends TransitionSystem τ where
+class TransitionMachine (τ : Type u) (Γᵢ Γₒ : outParam Type) extends TransitionSystem τ where
   init {t : τ} : List Γᵢ → cfg t
   -- TODO: Potentially work with a partial function here instead of `Option`?
   output {t : τ} : cfg t → Option (List Γₒ)
@@ -121,30 +121,36 @@ variable {τ : Type*} {Γᵢ Γₒ : Type} [TransitionMachine τ Γᵢ Γₒ]
 /--
 The transition machine `t` outputs `l'` on input `l`.
 -/
-structure Outputs (t : τ) (l : List Γᵢ) (l' : List Γₒ) where
+structure OutputRun (t : τ) (l : List Γᵢ) where
   haltState : cfg t
   haltState_halts : ¬ ∃ s, red haltState s
   evalsTo : TransitionSystem.EvalsTo t (init l) haltState
-  output_eq : output haltState =  some l'
+
+def Outputs (t : τ) (l : List Γᵢ) (l' : List Γₒ) :=
+  ∃ (run : OutputRun t l), output run.haltState = some l'
 
 /--
 The transition machine `t` outputs `l'` on input `l` in at most `n` steps.
 -/
-structure OutputsInTime (t : τ) (n : ℕ) (l : List Γᵢ) (l' : List Γₒ) where
+structure OutputRunInTime (t : τ) (l : List Γᵢ) (n : ℕ) where
   haltState : (cfg t)
   haltState_halts : ¬ ∃ s, red haltState s
   evals_to : TransitionSystem.EvalsToInTime t (init l) haltState n
-  output_eq : output haltState = some l'
+
+def OutputsInTime (t : τ) (n : ℕ) (l : List Γᵢ) (l' : List Γₒ) :=
+  ∃ (run : OutputRunInTime t l n), output run.haltState = some l'
+
+def HaltsInTime (t : τ) (n : ℕ) (l : List Γᵢ) :=
+  Nonempty (OutputRunInTime t l n)
 
 /--
 Time bounds of `OutputsInTime` can be increased.
 -/
-def OutputsInTime.of_le {t : τ} {n m : ℕ} {l : List Γᵢ} {l' : List Γₒ} (hnm : n ≤ m)
-    (hv : OutputsInTime t n l l') : OutputsInTime t m l l' where
+def OutputRunInTime.mono {t : τ} {n m : ℕ} {l : List Γᵢ} (hnm : n ≤ m)
+    (hv : OutputRunInTime (Γₒ := Γₒ) t l n) : OutputRunInTime (Γₒ := Γₒ) t l m where
   haltState := hv.haltState
   haltState_halts := hv.haltState_halts
   evals_to := TransitionSystem.EvalsToInTime.of_le hv.evals_to hnm
-  output_eq := hv.output_eq
 
 
 -- TODO: This is only true for deterministic machines.
