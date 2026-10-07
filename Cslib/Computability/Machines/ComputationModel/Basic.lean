@@ -10,6 +10,7 @@ public import Mathlib.Algebra.Polynomial.Eval.Defs
 public import Mathlib.Data.ENat.Lattice
 public import Mathlib.Logic.Function.Iterate
 public import Cslib.Foundations.Data.RelatesInSteps
+public import Cslib.Computability.Automata.Acceptors.Acceptor
 
 /-! # Transition Based Computation Models
 
@@ -73,14 +74,21 @@ This way, we can think of elements of `τ` as allowing computations `List Γᵢ 
 by lifting inputs into the computation context, iterating the `step` function,
 and taking output from this computation context.
 -/
-class TransitionMachine (τ : Type u) (Γᵢ Γₒ : outParam Type) extends TransitionSystem τ where
-  init {t : τ} : List Γᵢ → cfg t
+class InputTransitionSystem (τ : Type u) (α : outParam Type) extends TransitionSystem τ where
+  init {t : τ} : α → cfg t
+
+class IOTransitionSystem (τ : Type u) (α β : outParam Type) extends InputTransitionSystem τ α
+    where
   -- TODO: Potentially work with a partial function here instead of `Option`?
-  output {t : τ} : cfg t → Option (List Γₒ)
+  output {t : τ} : cfg t → Part β
+
+abbrev ListTransitionSystem (τ : Type*) (Γᵢ Γₒ : Type) := IOTransitionSystem τ (List Γᵢ) (List Γₒ)
+abbrev AcceptingTransitionSystem (τ : Type*) (Γᵢ : Type) := IOTransitionSystem τ (List Γᵢ) Unit
+
+open InputTransitionSystem
+open IOTransitionSystem
 
 namespace TransitionSystem
-
-
 
 variable {τ : Type u} [TransitionSystem τ]
 
@@ -113,72 +121,74 @@ theorem EvalsToInTime.of_le (h : EvalsToInTime t a b n₁) (hn : n₁ ≤ n₂) 
 
 end TransitionSystem
 
-namespace TransitionMachine
+namespace InputTransitionSystem
 open TransitionSystem
 
-variable {τ : Type*} {Γᵢ Γₒ : Type} [TransitionMachine τ Γᵢ Γₒ]
+variable {τ : Type*} {α : Type} [InputTransitionSystem τ α]
 
 /--
-The transition machine `t` outputs `l'` on input `l`.
+A valid execution sequence that halts.
 -/
-structure OutputRun (t : τ) (l : List Γᵢ) where
+structure HaltingRun (t : τ) (l : α) where
   haltState : cfg t
   haltState_halts : ¬ ∃ s, red haltState s
   evalsTo : TransitionSystem.EvalsTo t (init l) haltState
 
-def Outputs (t : τ) (l : List Γᵢ) (l' : List Γₒ) :=
-  ∃ (run : OutputRun t l), output run.haltState = some l'
-
 /--
-The transition machine `t` outputs `l'` on input `l` in at most `n` steps.
+A valid execution sequence that halts within time bound `n`.
 -/
-structure OutputRunInTime (t : τ) (l : List Γᵢ) (n : ℕ) where
+structure HaltingRunInTime (t : τ) (l : α) (n : ℕ) where
   haltState : (cfg t)
   haltState_halts : ¬ ∃ s, red haltState s
   evals_to : TransitionSystem.EvalsToInTime t (init l) haltState n
 
-def OutputsInTime (t : τ) (n : ℕ) (l : List Γᵢ) (l' : List Γₒ) :=
-  ∃ (run : OutputRunInTime t l n), output run.haltState = some l'
 
-def HaltsInTime (t : τ) (n : ℕ) (l : List Γᵢ) :=
-  Nonempty (OutputRunInTime t l n)
+def Halts (t : τ) (l : α) :=
+  Nonempty (HaltingRun t l)
 
 /--
-Time bounds of `OutputsInTime` can be increased.
+Time bounds of `HaltingRunInTime` can be increased.
 -/
-def OutputRunInTime.mono {t : τ} {n m : ℕ} {l : List Γᵢ} (hnm : n ≤ m)
-    (hv : OutputRunInTime (Γₒ := Γₒ) t l n) : OutputRunInTime (Γₒ := Γₒ) t l m where
+def HaltingRunInTime.mono {t : τ} {n m : ℕ} {l : α} (hnm : n ≤ m)
+    (hv : HaltingRunInTime t l n) : HaltingRunInTime t l m where
   haltState := hv.haltState
   haltState_halts := hv.haltState_halts
   evals_to := TransitionSystem.EvalsToInTime.of_le hv.evals_to hnm
 
+def HaltsInTime (t : τ) (l : α) (n : ℕ) :=
+  Nonempty (HaltingRunInTime t l n)
 
--- TODO: This is only true for deterministic machines.
--- Add the corresponding typeclass and then proof this statement
-/-
-The output of any computation of transition machines is unique.
-lemma OutputsInTime.output_unique {t : τ} {n₁ n₂ : ℕ} {l : List Γᵢ} {l'₁ l'₂ : List Γₒ}
-    (ho₁ : OutputsInTime t n₁ l l'₁) (ho₂ : OutputsInTime t n₂ l l'₂) :
-    l'₁ = l'₂ := by
-  obtain ⟨steps₁, hle₁, hr₁⟩ := ho₁.evals_to
-  obtain ⟨steps₂, hle₂, hr₂⟩ := ho₂.evals_to
-  wlog hle : steps₁ ≤ steps₂
-  · grind
-  · have : steps₁ = steps₂ := by
-      obtain ⟨d, hd⟩ := Nat.exists_eq_add_of_le' hle
-      cases d with
-      | zero => symm; simpa using hd
-      | succ d' =>
-          have := ho₂.evals_to.evals
-          rw [hd, Function.iterate_add_apply, ho₁.evals_to.evals,
-            Function.iterate_succ_apply, Option.bind_eq_bind, flip, Option.bind_some,
-            ho₁.haltState_halts, Function.iterate_fixed rfl] at this
-          contradiction
-    have : ho₁.haltState = ho₂.haltState := by
-      apply Option.some.inj
-      rw [← ho₁.evals_to.evals, ← ho₂.evals_to.evals, this]
-    rw [← Option.some_inj, ← ho₁.output_eq, ← ho₂.output_eq, this]
--/
+theorem HaltsInTime.mono {t : τ} {l : α} : Monotone (HaltsInTime t l ·) := by
+  intro _ _ hnm ⟨h⟩
+  exact ⟨h.mono hnm⟩
+
+
+end InputTransitionSystem
+
+
+namespace IOTransitionSystem
+open InputTransitionSystem
+
+variable {τ : Type*} {α β : Type}
+section
+variable [IOTransitionSystem τ α β]
+
+def Outputs (t : τ) (l : α) (l' : Part β) :=
+  ∃ (run : HaltingRun t l), output run.haltState = l'
+
+def OutputsInTime (t : τ) (l : α) (l' : Part β) (n : ℕ) :=
+  ∃ (run : HaltingRunInTime t l n), output run.haltState = l'
+
+theorem OutputsInTime.mono {t : τ} {l : α} {l' : Part β} : Monotone (OutputsInTime t l l' · )
+    := by
+  intro _ _ hnm ⟨h, heq⟩
+  exact ⟨h.mono hnm, heq⟩
+
+end
+
+
+section
+variable [ListTransitionSystem τ Γᵢ Γₒ]
 
 variable (τ) in
 /--
@@ -189,7 +199,7 @@ as well as a function bounding execution time.
 structure TimeComputable (f : List Γᵢ → List Γₒ) where
   t : τ
   time_bound : ℕ → ℕ
-  outputsFun : ∀ w, OutputsInTime t (time_bound w.length) w (f w)
+  outputsFun : ∀ w, OutputsInTime t w (f w) (time_bound w.length)
 
 variable (τ) in
 /--
@@ -200,7 +210,38 @@ structure PolyTimeComputable (f : List Γᵢ → List Γₒ) extends TimeComputa
   poly : Polynomial ℕ
   bounds : ∀ n, time_bound n ≤ poly.eval n
 
-end TransitionMachine
+end
+end IOTransitionSystem
+
+namespace AcceptingTransitionSystem
+open Cslib.Automata
+
+
+variable {τ : Type*} {Γᵢ : Type} [AcceptingTransitionSystem τ Γᵢ]
+
+/- Every `AcceptingTransitionSystem` is canonically an Acceptor. -/
+instance : Acceptor τ Γᵢ where
+  Accepts t l := ∃ (run : HaltingRun t l), output run.haltState = Part.some ()
+
+abbrev AcceptsInTime (t : τ) (l : List Γᵢ) (n : ℕ) :=
+  OutputsInTime t l (Part.some ()) n
+
+abbrev RejectsInTime (t : τ) (l : List Γᵢ) (n : ℕ) :=
+  OutputsInTime t l Part.none n
+
+abbrev DecidesInTime (t : τ) (l : List Γᵢ) (P : Prop) (n : ℕ) :=
+  OutputsInTime t l ⟨P, fun _ => ()⟩ n
+
+theorem AcceptsInTime.mono {t : τ} {l : List Γᵢ} : Monotone (AcceptsInTime t l · ) :=
+  OutputsInTime.mono
+
+theorem RejectsInTime.mono {t : τ} {l : List Γᵢ} : Monotone (AcceptsInTime t l · ) :=
+  OutputsInTime.mono
+
+theorem DecidesInTime.mono {t : τ} {l : List Γᵢ} : Monotone (AcceptsInTime t l · ) :=
+  OutputsInTime.mono
+
+end AcceptingTransitionSystem
 
 
 end Computation
