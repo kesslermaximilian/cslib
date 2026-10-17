@@ -57,6 +57,24 @@ We could then introduce abbreviations for `EvalsTo` or `Outputs` that insert `ω
 
 namespace Computation
 
+/- Means that there is a reasonable notion of "size" on input / output. -/
+class EncodingSize (Γ : Type) where
+  encodingSize : Γ → ℕ
+
+instance (Γ : Type) [EncodingSize Γ] : EncodingSize (Option Γ) where
+  encodingSize x := if h : x.isSome then 1 + EncodingSize.encodingSize (x.get h) else 1
+
+instance (Γ : Type) : EncodingSize (List Γ) where
+  encodingSize l := l.length
+
+instance : EncodingSize Unit where
+  encodingSize _ := 0
+
+instance : EncodingSize Bool where
+  encodingSize _ := 1
+
+open EncodingSize
+
 /--
 For each element `(t : τ)`, there is a bundle of a type `cfg t` with a step / transition function
 `cfg t → Option (cfg t)`.
@@ -74,16 +92,17 @@ This way, we can think of elements of `τ` as allowing computations `List Γᵢ 
 by lifting inputs into the computation context, iterating the `step` function,
 and taking output from this computation context.
 -/
+-- TODO: combine these again, since we use outParam
 class InputTransitionSystem (τ : Type u) (α : outParam Type) extends TransitionSystem τ where
   init {t : τ} : α → cfg t
 
 class IOTransitionSystem (τ : Type u) (α β : outParam Type) extends InputTransitionSystem τ α
     where
-  -- TODO: Potentially work with a partial function here instead of `Option`?
-  output {t : τ} : cfg t → Part β
+  -- TODO: Use option here, since that is mathematically more correct
+  output {t : τ} : cfg t → Option β
 
 abbrev ListTransitionSystem (τ : Type*) (Γᵢ Γₒ : Type) := IOTransitionSystem τ (List Γᵢ) (List Γₒ)
-abbrev AcceptingTransitionSystem (τ : Type*) (Γᵢ : Type) := IOTransitionSystem τ (List Γᵢ) Unit
+abbrev AcceptingTransitionSystem (τ : Type*) (Γᵢ : Type) := IOTransitionSystem τ (List Γᵢ) Bool
 
 open InputTransitionSystem
 open IOTransitionSystem
@@ -142,6 +161,10 @@ structure HaltingRunInTime (t : τ) (l : α) (n : ℕ) where
   haltState_halts : ¬ ∃ s, red haltState s
   evals_to : TransitionSystem.EvalsToInTime t (init l) haltState n
 
+structure HaltingRunInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ)
+    extends HaltingRunInTime t l n where
+  -- TODO: Put proper space bound in here
+  size_bound : SpaceSize.space_used haltState ≤ s
 
 def Halts (t : τ) (l : α) :=
   Nonempty (HaltingRun t l)
@@ -173,44 +196,38 @@ variable {τ : Type*} {α β : Type}
 section
 variable [IOTransitionSystem τ α β]
 
-def Outputs (t : τ) (l : α) (l' : Part β) :=
+def Outputs (t : τ) (l : α) (l' : Option β) :=
   ∃ (run : HaltingRun t l), output run.haltState = l'
 
-def OutputsInTime (t : τ) (l : α) (l' : Part β) (n : ℕ) :=
+def OutputsInTime (t : τ) (l : α) (l' : Option β) (n : ℕ) :=
   ∃ (run : HaltingRunInTime t l n), output run.haltState = l'
 
-theorem OutputsInTime.mono {t : τ} {l : α} {l' : Part β} : Monotone (OutputsInTime t l l' · )
+def OutputsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (l' : Option β) (n : ℕ) (s : ℕ) :=
+  ∃ (run : HaltingRunInTimeAndSpace t l n s), output run.haltState = l'
+
+theorem OutputsInTime.mono {t : τ} {l : α} {l' : Option β} : Monotone (OutputsInTime t l l' · )
     := by
   intro _ _ hnm ⟨h, heq⟩
   exact ⟨h.mono hnm, heq⟩
 
 end
 
-
-section
-variable [ListTransitionSystem τ Γᵢ Γₒ]
-
-variable (τ) in
 /--
 "Proof" that `f` is computable by the system `τ`.
 A witness machine is bundled as part of this structure,
 as well as a function bounding execution time.
 -/
-structure TimeComputable (f : List Γᵢ → List Γₒ) where
+structure TimeComputable {Γ Γ' : Type} [EncodingSize Γ]
+    (τ : Type*) [IOTransitionSystem τ Γ Γ'] (f : Γ → Γ') where
   t : τ
-  time_bound : ℕ → ℕ
-  outputsFun : ∀ w, OutputsInTime t w (f w) (time_bound w.length)
+  timeBound : ℕ → ℕ
+  outputsFunInTmie : ∀ w, IOTransitionSystem.OutputsInTime t w (f w) (timeBound (encodingSize w))
 
-variable (τ) in
-/--
-"Proof" that `f` is computable in polynomial time by the system `τ`.
-A witness machine and polynomial which bounds runtime are bundled as part of this structure.
--/
-structure PolyTimeComputable (f : List Γᵢ → List Γₒ) extends TimeComputable τ f where
+structure PolyTimeComputable {Γ Γ' : Type} [EncodingSize Γ]
+    (τ : Type*) [IOTransitionSystem τ Γ Γ'] (f : Γ → Γ') extends TimeComputable τ f where
   poly : Polynomial ℕ
-  bounds : ∀ n, time_bound n ≤ poly.eval n
+  bounds (n : ℕ) : timeBound n ≤ poly.eval n
 
-end
 end IOTransitionSystem
 
 namespace AcceptingTransitionSystem
@@ -221,16 +238,25 @@ variable {τ : Type*} {Γᵢ : Type} [AcceptingTransitionSystem τ Γᵢ]
 
 /- Every `AcceptingTransitionSystem` is canonically an Acceptor. -/
 instance : Acceptor τ Γᵢ where
-  Accepts t l := ∃ (run : HaltingRun t l), output run.haltState = Part.some ()
+  Accepts t l := ∃ (run : HaltingRun t l), output run.haltState = Option.some true
 
 abbrev AcceptsInTime (t : τ) (l : List Γᵢ) (n : ℕ) :=
-  OutputsInTime t l (Part.some ()) n
+  OutputsInTime t l (Option.some true) n
+
+abbrev AcceptsInTimeAndSpace [SpaceSize τ] (t : τ) (l : List Γᵢ) (n : ℕ) (s : ℕ) :=
+  OutputsInTimeAndSpace t l (Option.some true) n s
 
 abbrev RejectsInTime (t : τ) (l : List Γᵢ) (n : ℕ) :=
-  OutputsInTime t l Part.none n
+  OutputsInTime t l (Option.some false) n
 
-abbrev DecidesInTime (t : τ) (l : List Γᵢ) (P : Prop) (n : ℕ) :=
-  OutputsInTime t l ⟨P, fun _ => ()⟩ n
+abbrev RejectsInTimeAndSpace [SpaceSize τ] (t : τ) (l : List Γᵢ) (n : ℕ) (s : ℕ) :=
+  OutputsInTimeAndSpace t l Option.none n s
+
+--abbrev DecidesInTime (t : τ) (l : List Γᵢ) (P : Prop) (n : ℕ) :=
+--  OutputsInTime t l ⟨P, fun _ => ()⟩ n
+
+--abbrev DecidesInTimeAndSpace [SpaceSize τ] (t : τ) (l : List Γᵢ) (P : Prop) (n : ℕ) (s : ℕ) :=
+--  OutputsInTimeAndSpace t l ⟨P, fun _ => ()⟩ n s
 
 theorem AcceptsInTime.mono {t : τ} {l : List Γᵢ} : Monotone (AcceptsInTime t l · ) :=
   OutputsInTime.mono

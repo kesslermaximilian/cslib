@@ -13,6 +13,8 @@ public import Cslib.Foundations.Data.RelatesInSteps
 public import Cslib.Computability.Machines.ComputationModel.Basic
 public import Mathlib.Computability.Language
 public import Cslib.Computability.Automata.Acceptors.Acceptor
+public import Mathlib.Algebra.MvPolynomial.Basic
+public import Mathlib.Algebra.MvPolynomial.Eval
 
 /-! test-/
 
@@ -20,6 +22,20 @@ public import Cslib.Computability.Automata.Acceptors.Acceptor
 
 
 namespace Computation
+
+
+structure ResourceUsage where
+  time : ℕ
+  space : ℕ
+  inputEncodingSize : ℕ
+  outputEncodingSize : ℕ
+
+/-- Evaluation everywhere except space used. -/
+def ResourceUsage.noSpaceValuation (R : ResourceUsage) : Fin 3 → ℕ
+  | 0 => R.time
+  | 1 => R.inputEncodingSize
+  | 2 => R.outputEncodingSize
+
 namespace IOTransitionSystem
 open Cslib.Automata
 open IOTransitionSystem
@@ -28,8 +44,33 @@ open IOTransitionSystem
 Machine `τ'` emulates (i.e. replicates computations) machine `τ` with overhead `time`. -/
 def EmulatesInTime (Γ Γ' : Type) {α β : Type*} [IOTransitionSystem α Γ Γ']
   [IOTransitionSystem β Γ Γ'] (τ : α) (τ' : β) (time : ℕ → ℕ) :=
-  ∀ (l : Γ), ∀ (l' : Part Γ') n,
+  ∀ (l : Γ), ∀ (l' : Option Γ') n,
     OutputsInTime τ l l' n → OutputsInTime τ' l l' (time n)
+
+
+def ResourceUsage.mk₁ {Γ Γ' : Type} [EncodingSize Γ] [EncodingSize Γ']
+    (l : Γ) (l' : Option Γ') (n : ℕ) (s : ℕ) : ResourceUsage where
+  time := n
+  space := s
+  inputEncodingSize := EncodingSize.encodingSize l
+  outputEncodingSize := EncodingSize.encodingSize l'
+
+
+-- TODO: Generalize this for other resources apart from time/space ?
+
+/--
+Machine `τ'` emulates (i.e. replicates computation) machine `τ` with the specified overheads:
+`time_overhead` and `space_overhead` are both functions taking the four arguments
+`(previous time, previous space, previous input encoding size, previous output encoding size)`
+and are meant to specify the new time and space bounds.
+-/
+def EmulatesInTimeAndSpace (Γ Γ' : Type) [EncodingSize Γ] [EncodingSize Γ'] {α β : Type*}
+    [IOTransitionSystem α Γ Γ'] [SpaceSize α] [IOTransitionSystem β Γ Γ'] [SpaceSize β]
+    (τ : α) (τ' : β) (timeBound : ResourceUsage → ℕ) (spaceBound : ResourceUsage → ℕ):=
+  ∀ (l : Γ), ∀ (l' : Option Γ') n s,
+    OutputsInTimeAndSpace τ l l' n s
+    → OutputsInTimeAndSpace τ' l l'
+      (timeBound (ResourceUsage.mk₁ l l' n s)) (spaceBound (ResourceUsage.mk₁ l l' n s))
 
 /--
 An IOTransitionSystem on `α` is reducible to `β` (in a specified time class),
@@ -37,66 +78,47 @@ if all transducers in `α` have an emulator in `β` with time overhead given by 
 of the specified time class.
 -/
 def ReducibleInTime {Γ Γ' : Type} (α β : Type*) [IOTransitionSystem α Γ Γ']
-    [B : IOTransitionSystem β Γ Γ'] (time_class : Set (ℕ → ℕ)) :=
+    [IOTransitionSystem β Γ Γ'] (time_class : Set (ℕ → ℕ)) :=
   ∀ (τ : α), ∃ (τ' : β) (time: time_class), EmulatesInTime Γ Γ' τ τ' time
+
+def EquivalentInTime {Γ Γ' : Type} (α β : Type*) [IOTransitionSystem α Γ Γ']
+    [IOTransitionSystem β Γ Γ'] (time_class : Set (ℕ → ℕ)) :=
+  ReducibleInTime α β time_class ∧ ReducibleInTime β α time_class
+
+def ReducibleInTimeAndSpace {Γ Γ' : Type} [EncodingSize Γ] [EncodingSize Γ'] (α β : Type u)
+    [IOTransitionSystem α Γ Γ'] [SpaceSize α] [IOTransitionSystem β Γ Γ']
+    [SpaceSize β] (timeBounds : Set (ResourceUsage → ℕ))
+    (spaceBounds : Set (ResourceUsage → ℕ)) :=
+  ∀ (τ : α), ∃ (τ' : β) (timeBound : timeBounds) (spaceBound : spaceBounds),
+    EmulatesInTimeAndSpace Γ Γ' τ τ' timeBound spaceBound
+
+def EquivalentInTimeAndSpace {Γ Γ' : Type} [EncodingSize Γ] [EncodingSize Γ'] (α β : Type u)
+    [IOTransitionSystem α Γ Γ'] [SpaceSize α] [IOTransitionSystem β Γ Γ']
+    [SpaceSize β] (timeBounds : Set (ResourceUsage → ℕ))
+    (spaceBounds : Set (ResourceUsage → ℕ)) :=
+  ReducibleInTimeAndSpace α β timeBounds spaceBounds ∧
+    ReducibleInTimeAndSpace β α timeBounds spaceBounds
+
 
 end IOTransitionSystem
 
-abbrev FunctionModelT := Type -> Type -> Type*
 
-class ComputationModel (M : FunctionModelT) (InType : outParam (Type -> Type))
-    (OutType : outParam (Type -> Type)) where
-  transitionSystem: ∀ Γ Γ', IOTransitionSystem.{u, v} (M Γ Γ') (InType Γ) (OutType Γ')
+-- TODO: Make it easier to work with these classes
 
-abbrev FunctionComputationModel (M : FunctionModelT) :=
-  ComputationModel M List List
-
-abbrev LanguageRecognitionModel (M : FunctionModelT) :=
-  ComputationModel M List (fun _ => Unit)
-
-namespace ComputationModel
-
-
--- General instance exposing the typeclass synthesis
-instance (M : FunctionModelT) (InType OutType : Type -> Type) [ComputationModel M InType OutType]
-    (Γ Γ' : Type): IOTransitionSystem (M Γ Γ') (InType Γ) (OutType Γ') :=
-  ComputationModel.transitionSystem Γ Γ'
-
--- Duplicate, not needed, but here for checking
-instance (M : FunctionModelT) [FunctionComputationModel M] (Γ Γ' : Type) :
-    ListTransitionSystem (M Γ Γ') Γ Γ' := by
-  infer_instance
-
--- Duplicate, not needed, but here for checking
-instance (M : FunctionModelT) [LanguageRecognitionModel M] (Γ : Type) :
-    AcceptingTransitionSystem (M Γ Unit) Γ := by
-  infer_instance
-
-def ReducibleInTime (M M' : FunctionModelT) {InType OutType}
-    [ComputationModel M InType OutType] [ComputationModel M' InType OutType]
-    (time_class : Set (ℕ → ℕ)) :=
-  ∀ Γ Γ', IOTransitionSystem.ReducibleInTime (M Γ Γ') (M' Γ Γ') time_class
-
-def EquivalentInTime (M M' : FunctionModelT) {InType OutType}
-    [ComputationModel M InType OutType] [ComputationModel M' InType OutType]
-    (time_class : Set (ℕ → ℕ)) :=
-  ReducibleInTime M M' time_class ∧ ReducibleInTime M' M time_class
-
-
+/-- Functions described by polynomials -/
 def NaturalPolynomials : Set (ℕ → ℕ) := { f | ∃ (P : Polynomial ℕ), f = P.eval}
 
-abbrev ReducibleInPolyTime (M M' : FunctionModelT) {InType OutType}
-    [ComputationModel M InType OutType] [ComputationModel M' InType OutType] :=
-    ReducibleInTime M M' NaturalPolynomials
+/-- Functions that are polynomially bounded by input size, output size and runtime. -/
+def ResourceNoSpacePolynomials : Set (ResourceUsage → ℕ) :=
+  {f | ∃ (P : MvPolynomial (Fin 3) ℕ), ∀ R, f R = P.eval R.noSpaceValuation }
 
-abbrev EquivalentInPolyTime (M M' : FunctionModelT) {InType OutType}
-    [ComputationModel M InType OutType] [ComputationModel M' InType OutType] :=
-  EquivalentInTime M M' NaturalPolynomials
+/-- Functions that are polynomially bounded by space usage. -/
+def ResourceSpacePolynomials : Set (ResourceUsage → ℕ) :=
+  {f | ∃ (P : Polynomial ℕ), f = P.eval ∘ ResourceUsage.space}
 
-
-end ComputationModel
 
 namespace AcceptingTransitionSystem
+
 
 open AcceptingTransitionSystem
 
@@ -105,35 +127,85 @@ structure DecidesInPolyTime {Γ : Type} {τ : Type*} [AcceptingTransitionSystem 
   (l : Language Γ) where
   /-- A time function bounding execution time dependent on input size. -/
   time : Polynomial ℕ
-  outputsFun : ∀ a, DecidesInTime t a (a ∈ l) (time.eval (R := ℕ) a.length)
+  accepts (w : List Γ) : w ∈ l → AcceptsInTime t w (time.eval (R := ℕ) w.length)
+  rejects (w : List Γ) : w ∉ l → RejectsInTime t w (time.eval (R := ℕ) w.length)
 
 
-def PolyTimeDecidableLanguages (Γ : Type) (M : FunctionModelT) [LanguageRecognitionModel M] :
+--def DecidableInPolyTime {Γ : Type} (l : Language Γ) (M : FunctionModelT)
+    --[LanguageRecognitionModel M] :=
+  --∃ (t : M Γ Unit), Nonempty (DecidesInPolyTime t l)
+
+def DecidableInPolyTime {Γ : Type} (l : Language Γ) (τ : Type*) [AcceptingTransitionSystem τ Γ]
+  := ∃ (t : τ), Nonempty (DecidesInPolyTime t l)
+
+-- P
+--def PolyTimeDecidableLanguages' (Γ : Type) (M : FunctionModelT) [LanguageRecognitionModel M] :
+    --Set (Language Γ) :=
+  --{ l | ∃ (t : M Γ Unit), Nonempty (DecidesInPolyTime t l) }
+
+
+-- P, not bundled, not using ComputationModel
+def PolyTimeDecidableLanguages (Γ : Type) (τ : Type*) [AcceptingTransitionSystem τ Γ] :
     Set (Language Γ) :=
-  { l | ∃ (t : M Γ Unit), Nonempty (DecidesInPolyTime t l) }
+  { l | DecidableInPolyTime l τ }
 
-theorem P_constant_aux (M M' : FunctionModelT) [LanguageRecognitionModel M]
-    [LanguageRecognitionModel M'] (h : ComputationModel.ReducibleInPolyTime M M') (Γ : Type) :
-    PolyTimeDecidableLanguages Γ M ⊆ PolyTimeDecidableLanguages Γ M' := by
+
+structure PolyTimeTransformable {Γ Γ' : Type} (τ : Type*) [ListTransitionSystem τ Γ Γ']
+    (L₁ : Language Γ) (L₂ : Language Γ') where
+  f : List Γ → List Γ'
+  f_correct : ∀ w, w ∈ L₁ ↔ f w ∈ L₂
+  computable : IOTransitionSystem.PolyTimeComputable τ f
+
+
+/--
+"Proof" that `f` is computable in polynomial time by the system `τ`.
+A witness machine and polynomial which bounds runtime are bundled as part of this structure.
+structure PolyTimeComputable (f : List Γᵢ → List Γₒ) extends TimeComputable τ f where
+  poly : Polynomial ℕ
+  bounds : ∀ n, time_bound n ≤ poly.eval n
+-/
+structure TransformsInPolyTime {Γ Γ' : Type} {τ : Type*} [ListTransitionSystem τ Γ Γ']
+    (t : τ) (L₁ : Language Γ) (L₂ : Language Γ') where
+  time : Polynomial ℕ
+  f : List Γ → List Γ'
+  f_correct : ∀ w, w ∈ L₁ ↔ f w ∈ L₂
+  t_computes : ∀ w, IOTransitionSystem.OutputsInTime t w (f w) (time.eval w.length)
+
+
+
+--def NPComplete (Γ : Type) (τ : Type*) [AcceptingTransitionSystm τ Γ] (l : Language Γ) :=
+
+
+-- Sat is NP-complete
+-- 1. Sat ∈ NP (Γ)                                             -> AcceptingTransitionSystem
+-- 2. ∀ Problem ∈ NP (Γ') , ∃ PolynomialTransformation to SAT  -> ListTransitionModel Γ Γ'
+--                                                             -> AcceptingTransitionSystem
+
+theorem P_constant_aux {Γ : Type} (τ τ' : Type*) [AcceptingTransitionSystem τ Γ]
+    [AcceptingTransitionSystem τ' Γ]
+    (h : IOTransitionSystem.ReducibleInTime τ τ' NaturalPolynomials) :
+    PolyTimeDecidableLanguages Γ τ ⊆ PolyTimeDecidableLanguages Γ τ' := by
   intro l ⟨t, ⟨hdecide⟩⟩
-  obtain ⟨t', ⟨_, time, htime⟩, hemulate⟩ := h Γ Unit t
+  obtain ⟨t', ⟨_, time, htime⟩, hemulate⟩ := h t
   use t'
   use Polynomial.comp time hdecide.time
-  intro a
-  specialize hemulate _ _ _ (hdecide.outputsFun a)
-  simpa [htime] using hemulate
+  <;> intro w hw
+  · specialize hemulate _ _ _ (hdecide.accepts w hw)
+    simpa [htime] using hemulate
+  · specialize hemulate _ _ _ (hdecide.rejects w hw)
+    simpa [htime] using hemulate
 
 /- If two computation models are equivalent in Polynomial time,
 then the class `P` agrees for them.
 -/
-theorem P_constant (M M' : FunctionModelT) [LanguageRecognitionModel M]
-    [LanguageRecognitionModel M'] (h : ComputationModel.EquivalentInPolyTime M M') (Γ : Type) :
-    PolyTimeDecidableLanguages Γ M = PolyTimeDecidableLanguages Γ M' := by
+theorem P_constant {Γ : Type} (τ τ' : Type*) [AcceptingTransitionSystem τ Γ]
+    [AcceptingTransitionSystem τ' Γ]
+    (h : IOTransitionSystem.EquivalentInTime τ τ' NaturalPolynomials) :
+    PolyTimeDecidableLanguages Γ τ = PolyTimeDecidableLanguages Γ τ' := by
   obtain ⟨_, _⟩ := h
   apply Set.eq_of_subset_of_subset
   <;> apply P_constant_aux
   <;> assumption
-
 
 end AcceptingTransitionSystem
 end Computation
