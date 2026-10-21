@@ -25,6 +25,21 @@ namespace Std.Sat
 attribute [local simp] CNF.not_VarMem_empty
 attribute [local simp] CNF.VarMem_append
 
+/-- Evaluate a clause constructed from a list of literals. -/
+@[simp]
+lemma CNF.Clause.eval_ofLiterals {α : Type*} (a : α → Bool) (ls : List (Literal α)) :
+    (CNF.Clause.ofLiterals ls).eval a = ls.any (fun lit => a lit.1 == lit.2) := by
+  apply Bool.eq_iff_iff.mpr
+  rw [← CNF.Clause.sat_def]
+  rw [CNF.Clause.sat_iff_exists_mem_eq]
+  simp [← CNF.Clause.mem_literals_iff]
+
+/-- A variable occurs in a list-built clause exactly when one of its polarities occurs. -/
+@[simp]
+lemma CNF.Clause.VarMem_ofLiterals {α : Type*} (v : α) (ls : List (Literal α)) :
+    CNF.Clause.VarMem v (CNF.Clause.ofLiterals ls) ↔ ∃ pol, (v, pol) ∈ ls := by
+  simp [CNF.Clause.VarMem_iff_exists_mem_literals]
+
 def CNF.flatten {α : Type*} : List (CNF α) →  CNF α
   | .nil => CNF.empty
   | .cons f fs => f ++ (flatten fs)
@@ -361,7 +376,6 @@ def TMSAT.mem (Q : ℕ) (v : VarIndex tm) : Prop :=
   | VarIndex.state t n _ => t ≤ Q ∧ n ∈ tapeIndices Q
   | VarIndex.tape t n _ => t ≤ Q ∧ n ∈ tapeIndices Q
 
-@[simp]
 lemma CNF.Clause.mem_map {α β : Type*} (v : α) (l : List β) (f : β → Literal α) :
     CNF.Clause.VarMem v (CNF.Clause.ofLiterals (l.map f))
     ↔ ∃ x ∈ l, f x = (v, true) ∨ f x = (v, false) := by
@@ -403,7 +417,9 @@ lemma Mem_WellDefined_aux₁ (Q : ℕ) (v : VarIndex tm) :
     simp [StateExists, CNF.VarMem, states.complete, hn]
   case tape t n _ =>
     refine ⟨t, by linarith, SymbolExists tm t n, ?_⟩
-    simp [SymbolExists, CNF.VarMem, symbols.complete, hn]
+    constructor
+    · exact Or.inl ⟨n, hn, rfl⟩
+    · simp [SymbolExists, CNF.VarMem, symbols.complete]
 
 lemma Mem_TMSAT_aux₀ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) (v : VarIndex tm)
     (h : inst.length + 1 + C ≤ Q) :
@@ -472,9 +488,9 @@ lemma assignment_tape_exists_aux (a : VarIndex tm → Bool) (Q : ℕ)
     Bool.and_true, Bool.and_eq_true] at hs
   obtain ⟨he, hu, _, _⟩ := hs t ht
   apply existsUnique_of_exists_of_unique
-  · simpa [SymbolExists, CNF.eval, CNF.Clause.eval] using he n hn
+  · simpa [SymbolExists, CNF.eval, CNF.Clause.eval_ofLiterals] using he n hn
   · specialize hu n hn
-    simp [SymbolUnique, CNF.eval, CNF.Clause.eval] at hu
+    simp [SymbolUnique, CNF.eval, CNF.Clause.eval_ofLiterals] at hu
     grind
 
 lemma assignment_tape_exists (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) :
@@ -499,14 +515,15 @@ lemma assignment_state_exists' (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuit
       Bool.and_true, Bool.and_eq_true] at hw
     obtain ⟨_, _, he, hu⟩ := hw t ht
     apply existsUnique_of_exists_of_unique
-    · simp only [CNF.eval, StateExists, CNF.Clause.eval, List.size_toArray, List.length_cons,
-      List.length_nil, zero_add, List.all_toArray', List.all_cons, List.any_map, List.all_nil,
+    · simp only [CNF.eval, StateExists, CNF.Clause.eval_ofLiterals, List.size_toArray,
+      List.length_cons, List.length_nil, zero_add, List.all_toArray', List.all_cons,
+      List.any_map, List.all_nil,
       Bool.and_true, List.any_eq_true, Function.comp_apply, beq_true, Prod.exists,
       List.pair_mem_product, states.complete, true_and] at he
       obtain ⟨s, n, _, _⟩ := he
       use (⟨n, by grind [Int.mem_range_iff]⟩, s)
     · rintro ⟨n₁, s₁⟩ ⟨n₂, s₂⟩ hn₁ hn₂
-      simp [CNF.eval, CNF.Clause.eval, StateUnique] at hu
+      simp [CNF.eval, CNF.Clause.eval_ofLiterals, StateUnique] at hu
       grind [hs.state_normalized]
 
 lemma assignment_state_exists (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a Q) :
@@ -522,14 +539,15 @@ lemma assignment_state_exists (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuita
       Bool.and_true, Bool.and_eq_true] at hw
     obtain ⟨_, _, he, hu⟩ := hw t ht
     apply existsUnique_of_exists_of_unique
-    · simp only [CNF.eval, StateExists, CNF.Clause.eval, List.size_toArray, List.length_cons,
-      List.length_nil, zero_add, List.all_toArray', List.all_cons, List.any_map, List.all_nil,
+    · simp only [CNF.eval, StateExists, CNF.Clause.eval_ofLiterals, List.size_toArray,
+      List.length_cons, List.length_nil, zero_add, List.all_toArray', List.all_cons,
+      List.any_map, List.all_nil,
       Bool.and_true, List.any_eq_true, Function.comp_apply, beq_true, Prod.exists,
       List.pair_mem_product, states.complete, true_and] at he
       obtain ⟨s, n, _, _⟩ := he
       use (n, s)
     · rintro ⟨n₁, s₁⟩ ⟨n₂, s₂⟩ hn₁ hn₂
-      simp [CNF.eval, CNF.Clause.eval, StateUnique] at hu
+      simp [CNF.eval, CNF.Clause.eval_ofLiterals, StateUnique] at hu
       grind [hs.state_normalized]
 
 omit [Fintype Symbol] [DecidableEq Symbol] in
@@ -632,7 +650,7 @@ lemma initCfgN_iff_Init (a : VarIndex tm → Bool) {Q C : ℕ} (hs : IsSuitable 
     (∃ c : List Symbol, c.length = C ∧ (recoverCfgN a Q 0) = tm.initCfgN (List.combine inst c))
     ↔ CNF.Sat a (Encoding.Init tm Q C inst) := by
   simp [Encoding.Init, InitState, CNF.Sat, InitInstance, InitSeparator, InitCertificate, InitBlank]
-  simp [CNF.eval, recoverCfgN_tape_spec hs, recoverCfgN_state_spec hs, CNF.Clause.eval,
+  simp [CNF.eval, recoverCfgN_tape_spec hs, recoverCfgN_state_spec hs, CNF.Clause.eval_ofLiterals,
     certificateIndices, blankIndices, Int.mem_range_iff, mem_instanceSymbols]
   grind [SingleTapeTM.initCfgN_iff tm inst hQ (recoverCfgN_SupportedBy Q hs 0)]
 
@@ -640,10 +658,17 @@ lemma haltCfg_Iff_Output (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a
     (hstop : (recoverCfgN a Q Q).state = none) :
     (recoverCfgN a Q Q).toCfg = SingleTapeTM.haltCfg tm [accept]
     ↔ CNF.Sat a (Encoding.Output tm Q accept) := by
-  simp [CNF.Sat, Output, Output₀, Output₁]
-  simp [CNF.eval, recoverCfgN_tape_spec hs, recoverCfgN_state_spec' hs,
-    SingleTapeTM.Cfg.ext_iff, hstop, tapeIndices, Int.mem_range_iff]
-  grind [SingleTapeTM.haltCfgN_iff accept (recoverCfgN_SupportedBy Q hs Q)]
+  simp only [CNF.Sat, Output, Output₀, Output₁, CNF.eval_append, Bool.and_eq_true]
+  simp only [SingleTapeTM.Cfg.ext_iff, hstop, SingleTapeTM.haltCfg_state,
+    SingleTapeTM.haltCfg_BiTape, true_and, CNF.eval, tapeIndices, List.size_toArray,
+    List.length_map, List.all_toArray', List.all_map, List.all_eq_true, Int.mem_range_iff,
+    Function.comp_apply, CNF.Clause.eval_ofLiterals, List.any_cons, beq_false, beq_true,
+    List.any_nil, Bool.or_false, Bool.or_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true,
+    recoverCfgN_state_spec' hs, ne_eq, not_true_eq_false, or_false,
+    recoverCfgN_tape_spec hs, and_imp, Prod.forall, NoneqPairs.mem_iff]
+  rw [SingleTapeTM.haltCfgN_iff accept (recoverCfgN_SupportedBy Q hs Q)]
+  simp only [Set.mem_Icc, and_imp, Int.lt_add_one_iff]
+  grind
 
 lemma run_iff_Init_and_Propagate (a : VarIndex tm → Bool) {Q C : ℕ} (hs : IsSuitable a Q)
     (inst : List Symbol) (hQ : inst.length + 1 + C ≤ Q) :
@@ -742,7 +767,7 @@ lemma mkAssignment_aux_WellDefined (states : ℕ → SingleTapeTM.CfgN tm) (Q : 
     (hs : ∀ t ≤ Q, (states t).n ∈ tapeIndices Q) :
     CNF.Sat (mkAssignment_aux states) (WellDefined tm Q) := by
   simp [WellDefined, CNF.sat_def, WellDefined₀]
-  simp [SymbolExists, SymbolUnique, StateExists, StateUnique, CNF.eval, CNF.Clause.eval,
+  simp [SymbolExists, SymbolUnique, StateExists, StateUnique, CNF.eval, CNF.Clause.eval_ofLiterals,
     mkAssignment_aux]
   grind
 
