@@ -658,16 +658,10 @@ lemma haltCfg_Iff_Output (a : VarIndex tm → Bool) {Q : ℕ} (hs : IsSuitable a
     (hstop : (recoverCfgN a Q Q).state = none) :
     (recoverCfgN a Q Q).toCfg = SingleTapeTM.haltCfg tm [accept]
     ↔ CNF.Sat a (Encoding.Output tm Q accept) := by
-  simp only [CNF.Sat, Output, Output₀, Output₁, CNF.eval_append, Bool.and_eq_true]
-  simp only [SingleTapeTM.Cfg.ext_iff, hstop, SingleTapeTM.haltCfg_state,
-    SingleTapeTM.haltCfg_BiTape, true_and, CNF.eval, tapeIndices, List.size_toArray,
-    List.length_map, List.all_toArray', List.all_map, List.all_eq_true, Int.mem_range_iff,
-    Function.comp_apply, CNF.Clause.eval_ofLiterals, List.any_cons, beq_false, beq_true,
-    List.any_nil, Bool.or_false, Bool.or_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true,
-    recoverCfgN_state_spec' hs, ne_eq, not_true_eq_false, or_false,
-    recoverCfgN_tape_spec hs, and_imp, Prod.forall, NoneqPairs.mem_iff]
-  rw [SingleTapeTM.haltCfgN_iff accept (recoverCfgN_SupportedBy Q hs Q)]
-  simp only [Set.mem_Icc, and_imp, Int.lt_add_one_iff]
+  simp [CNF.Sat, Output, Output₀, Output₁]
+  simp [CNF.eval, recoverCfgN_tape_spec hs, recoverCfgN_state_spec' hs,
+    SingleTapeTM.Cfg.ext_iff, hstop, tapeIndices, Int.mem_range_iff,
+    SingleTapeTM.haltCfgN_iff accept (recoverCfgN_SupportedBy Q hs Q)]
   grind
 
 lemma run_iff_Init_and_Propagate (a : VarIndex tm → Bool) {Q C : ℕ} (hs : IsSuitable a Q)
