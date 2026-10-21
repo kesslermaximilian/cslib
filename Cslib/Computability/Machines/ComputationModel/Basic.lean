@@ -67,6 +67,9 @@ instance (Γ : Type) [EncodingSize Γ] : EncodingSize (Option Γ) where
 instance (Γ : Type) : EncodingSize (List Γ) where
   encodingSize l := l.length
 
+instance (Γ : Type) : EncodingSize (List Γ × List Γ) where
+  encodingSize p := p.fst.length + p.snd.length + 1
+
 instance : EncodingSize Unit where
   encodingSize _ := 0
 
@@ -209,6 +212,12 @@ theorem OutputsInTime.mono {t : τ} {l : α} {l' : Option β} : Monotone (Output
     := by
   intro _ _ hnm ⟨h, heq⟩
   exact ⟨h.mono hnm, heq⟩
+
+def ComputesInTime [EncodingSize α] (t : τ) (f : α → β) (time : ℕ → ℕ) :=
+  ∀ (l : α), OutputsInTime t l (some (f l)) (time (EncodingSize.encodingSize l))
+
+def ComputesInPolyTime [EncodingSize α] (t : τ) (f : α → β) :=
+  ∃ (P : Polynomial ℕ), ComputesInTime t f P.eval
 
 end
 

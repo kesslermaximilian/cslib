@@ -20,6 +20,9 @@ public import Mathlib.Algebra.MvPolynomial.Eval
 
 @[expose] public section
 
+/-- Combine two lists by embedding them into an amended alphabet with a separator. -/
+def List.combine {Γ : Type} (fst : List Γ) (snd : List Γ) : List (Option Γ) :=
+  fst.map Option.some ++ [none] ++ snd.map Option.some
 
 namespace Computation
 
@@ -130,13 +133,44 @@ structure DecidesInPolyTime {Γ : Type} {τ : Type*} [AcceptingTransitionSystem 
   accepts (w : List Γ) : w ∈ l → AcceptsInTime t w (time.eval (R := ℕ) w.length)
   rejects (w : List Γ) : w ∉ l → RejectsInTime t w (time.eval (R := ℕ) w.length)
 
+structure Verifier {Γ : Type} (l : Language Γ) where
+  accepts : List Γ → List Γ → Bool
+  existsAccepts (w : List Γ) : w ∈ l → ∃ c, accepts w c = True
+  acceptsCorrect (w c: List Γ) : accepts w c = True → w ∈ l
+
+-- More abstract version, since we don't talk about encoding
+structure VerifiesInPolyTime₂ {Γ : Type} {τ : Type*} [IOTransitionSystem τ (List Γ × List Γ) Bool]
+    (t : τ) (l : Language Γ)
+    where
+  verifier : Verifier l
+  -- Note: Depends on encoding Size defined on of `List Γ × List Γ`
+  computes : IOTransitionSystem.ComputesInPolyTime t (Function.uncurry verifier.accepts)
+
+structure VerificationLanguageFor {Γ : Type} (l : Language Γ) where
+  accepting : Language (Option Γ)
+  existsAccepts (w : List Γ) : w ∈ l → ∃ (c : List Γ), List.combine w c ∈ accepting
+  acceptsCorrect (w : List Γ) (c : List Γ) : List.combine w c ∈ accepting → w ∈ l
+
+
+structure VerifiesInPolyTime {Γ : Type} {τ : Type*} [AcceptingTransitionSystem τ (Option Γ)]
+    (t : τ) (l : Language Γ) where
+  time : Polynomial ℕ
+  language : VerificationLanguageFor l
+  verifies : DecidesInPolyTime t language.accepting
+
+
+def DecidableInPolyTime {Γ : Type} (l : Language Γ) (τ : Type*) [AcceptingTransitionSystem τ Γ]
+  := ∃ (t : τ), Nonempty (DecidesInPolyTime t l)
+
+def VerifiableInPolyTime {Γ : Type} (l : Language Γ) (τ : Type*)
+    [AcceptingTransitionSystem τ (Option Γ)]
+  := ∃ (t : τ), Nonempty (VerifiesInPolyTime t l)
+
+
 
 --def DecidableInPolyTime {Γ : Type} (l : Language Γ) (M : FunctionModelT)
     --[LanguageRecognitionModel M] :=
   --∃ (t : M Γ Unit), Nonempty (DecidesInPolyTime t l)
-
-def DecidableInPolyTime {Γ : Type} (l : Language Γ) (τ : Type*) [AcceptingTransitionSystem τ Γ]
-  := ∃ (t : τ), Nonempty (DecidesInPolyTime t l)
 
 -- P
 --def PolyTimeDecidableLanguages' (Γ : Type) (M : FunctionModelT) [LanguageRecognitionModel M] :
@@ -149,12 +183,32 @@ def PolyTimeDecidableLanguages (Γ : Type) (τ : Type*) [AcceptingTransitionSyst
     Set (Language Γ) :=
   { l | DecidableInPolyTime l τ }
 
+def PolyTimeVerifiableLanguages (Γ : Type) (τ : Type*) [AcceptingTransitionSystem τ (Option Γ)] :
+    Set (Language Γ) :=
+  { l | VerifiableInPolyTime l τ}
+
 
 structure PolyTimeTransformable {Γ Γ' : Type} (τ : Type*) [ListTransitionSystem τ Γ Γ']
     (L₁ : Language Γ) (L₂ : Language Γ') where
   f : List Γ → List Γ'
   f_correct : ∀ w, w ∈ L₁ ↔ f w ∈ L₂
   computable : IOTransitionSystem.PolyTimeComputable τ f
+
+
+structure IsNPComplete {Γ : Type} (l : Language Γ) (τO τT : Type*)
+    [AcceptingTransitionSystem τO (Option Γ)]
+    [ListTransitionSystem τT Γ Γ] where
+  elemNP : l ∈ PolyTimeVerifiableLanguages Γ τO
+  transforms (l' : Language Γ): l' ∈ PolyTimeVerifiableLanguages Γ τO
+    → Nonempty (PolyTimeTransformable τT l l')
+
+
+-- TODO: Can we even prove this in this generality?
+-- Probably no, we have no idea how these two acceptance systems interact with
+-- each other!
+theorem P_sub_NP (Γ : Type) (τ τO : Type*) [AcceptingTransitionSystem τ Γ]
+    [AcceptingTransitionSystem τO (Option Γ)] :
+  PolyTimeDecidableLanguages Γ τ ⊆ PolyTimeVerifiableLanguages Γ τO := sorry
 
 
 /--
