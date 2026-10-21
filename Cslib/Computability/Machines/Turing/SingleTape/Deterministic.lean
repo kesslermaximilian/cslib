@@ -541,6 +541,7 @@ def TimeComputable.comp {f g : List Symbol → List Symbol}
       exact output_length_le_input_length_add_time hf.t _ _ _ (hf.outputsFunInTmie a)
   )
 
+-- TODO: Move this to IOTransitionSystem (since it works in general)
 /--
 Convert a `TimeComputable` to one with a monotone time bound, by replacing the time bound `t`
 with `partialSups t`, i.e. `n ↦ max (t 0) ⋯ (t n)`. The underlying machine is unchanged.
