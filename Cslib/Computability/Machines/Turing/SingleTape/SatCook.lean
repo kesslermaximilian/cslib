@@ -184,22 +184,26 @@ def blankIndices : List ℤ := Int.range (-Q) 0 ++ Int.range (inst.length + C + 
 /-- At time `t`, there is a symbol on tape position `n` -/
 def SymbolExists (t : ℕ) (n : ℤ) : CNF (VarIndex tm) :=
   ⟨⟨[
+    CNF.Clause.ofLiterals (
     symbols
-    |> List.map fun a => (VarIndex.tape t n a, true)
+    |> List.map fun a => (VarIndex.tape t n a, true))
   ]⟩⟩
 
 /-- At time `t`, the symbol on tape position `n` is unique -/
 def SymbolUnique (t : ℕ) (n : ℤ) : CNF (VarIndex tm) :=
   ⟨⟨symbols
       |> NoneqPairs
-      |> List.map fun (a, b) => [(VarIndex.tape t n a, false), (VarIndex.tape t n b, false)]
+      |> List.map fun (a, b) =>
+        CNF.Clause.ofLiterals [(VarIndex.tape t n a, false), (VarIndex.tape t n b, false)]
   ⟩⟩
 
 /-- At time `t`, there is a state `s` and tape position `n` for the head -/
 def StateExists (t : ℕ) : CNF (VarIndex tm) :=
   ⟨⟨[
-    List.product (states tm) (tapeIndices Q)
+    CNF.Clause.ofLiterals (
+      List.product (states tm) (tapeIndices Q)
       |> List.map fun (s, n) => (VarIndex.state t n s, true)
+    )
   ]⟩⟩
 
 /-- At time `t`, the pair `(s, n)` of state and tape position is unique -/
@@ -208,14 +212,15 @@ def StateUnique (t : ℕ) : CNF (VarIndex tm) where
     List.product (states tm) (tapeIndices Q)
       |> NoneqPairs
       |> List.map fun ⟨(s, n), (s', n')⟩ =>
-        [(VarIndex.state t n s, false), (VarIndex.state t n' s', false)]
+        CNF.Clause.ofLiterals [(VarIndex.state t n s, false), (VarIndex.state t n' s', false)]
   }
 
 /-- When transitioning `t ↦ t + 1` and the machine is in state `s`,
   the state and r/w position is correctly updated (depending on the tape symbol) -/
 def UpdateState (t : ℕ) (n : ℤ) (a : (Option (Option Symbol))) (s : Option tm.State) :
     CNF (VarIndex tm) :=
-  ⟨⟨[[
+  ⟨⟨[
+    CNF.Clause.ofLiterals [
     (VarIndex.tape t n a, false),
     (VarIndex.state t n s, false),
     (VarIndex.state (t + 1) (n + posChange (tm.tr' s a).fst.movement) (tm.tr' s a).snd, true)
@@ -224,7 +229,8 @@ def UpdateState (t : ℕ) (n : ℤ) (a : (Option (Option Symbol))) (s : Option t
 /-- When transitioning `t ↦ t + 1`, the tape at the r/w head is correctly updated -/
 def UpdateTape (t : ℕ) (n : ℤ) (a : (Option (Option Symbol))) (s : Option tm.State) :
     CNF (VarIndex tm) :=
-  ⟨⟨[[
+  ⟨⟨[
+    CNF.Clause.ofLiterals [
     (VarIndex.tape t n a, false),
     (VarIndex.state t n s, false),
     (VarIndex.tape (t + 1) n (tm.tr' s a).fst.symbol, true)
@@ -236,37 +242,38 @@ def KeepTape (t : ℕ) (n : ℤ) (a : (Option (Option (Symbol)))) (s : Option tm
   ⟨⟨
   tapeIndices Q
     |> List.filter (fun n' => decide (n' ≠ n))
-    |> List.map fun n' => [(VarIndex.tape t n a, false), (VarIndex.state t n' s, false),
-      (VarIndex.tape (t + 1) n a, true)]
+    |> List.map fun n' => CNF.Clause.ofLiterals [(VarIndex.tape t n a, false),
+      (VarIndex.state t n' s, false), (VarIndex.tape (t + 1) n a, true)]
   ⟩⟩
 
 /-- At time `0`, the instance is written on the tape -/
 def InitInstance : CNF (VarIndex tm) :=
   ⟨⟨
-  inst.zipIdx.map fun (a, n) => [(VarIndex.tape 0 n (some (some a)), true)]
+  inst.zipIdx.map fun (a, n) => CNF.Clause.ofLiterals [(VarIndex.tape 0 n (some (some a)), true)]
   ⟩⟩
 
 /-- At time `0`, the separator is written behind the instance -/
 def InitSeparator : CNF (VarIndex tm) :=
-  ⟨⟨[[(VarIndex.tape 0 (inst.length) #₀, true)]]⟩⟩
+  ⟨⟨[CNF.Clause.ofLiterals [(VarIndex.tape 0 (inst.length) #₀, true)]]⟩⟩
 
 /-- At time `0`, *any* certificate consisting only of symbols of `Γ` is written behind
  the separator symbol -/
 def InitCertificate : CNF (VarIndex tm) :=
   ⟨⟨
     certificateIndices C inst
-    |> List.map fun n => instanceSymbols.map fun a => (VarIndex.tape 0 n a, true)
+    |> List.map fun n =>
+      CNF.Clause.ofLiterals (instanceSymbols.map fun a => (VarIndex.tape 0 n a, true))
   ⟩⟩
 
 /-- At time `0`, the rest of the tape contains only blank symbols -/
 def InitBlank : CNF (VarIndex tm) :=
   ⟨⟨blankIndices Q C inst
-    |> List.map fun n => [(VarIndex.tape 0 n ␣, true)]
+    |> List.map fun n => CNF.Clause.ofLiterals [(VarIndex.tape 0 n ␣, true)]
   ⟩⟩
 
 /-- At time `0`, the state is correctly initialized -/
 def InitState : CNF (VarIndex tm) :=
-  ⟨⟨[[(VarIndex.state 0 0 (some tm.q₀), true)]]⟩⟩
+  ⟨⟨[CNF.Clause.ofLiterals [(VarIndex.state 0 0 (some tm.q₀), true)]]⟩⟩
 
 /-- At time `0`, the tape and state are correctly initialized -/
 def Init : CNF (VarIndex tm) :=
@@ -278,13 +285,14 @@ def Output₀ : CNF (VarIndex tm) :=
   ⟨⟨
   tapeIndices Q
     |> List.map fun n =>
-      [(VarIndex.state Q n none, false), (VarIndex.tape Q n (some (some accept)), true)]
+      CNF.Clause.ofLiterals
+        [(VarIndex.state Q n none, false), (VarIndex.tape Q n (some (some accept)), true)]
   ⟩⟩
 
 /-- At time `Q`, the rest of the tape is filled with blanks. -/
 def Output₁ : CNF (VarIndex tm) :=
   ⟨⟨NoneqPairs (tapeIndices Q)
-    |> List.map fun (n, m) =>
+    |> List.map fun (n, m) => CNF.Clause.ofLiterals
       [(VarIndex.state Q n none, false), (VarIndex.tape Q m ␣, true)]
   ⟩⟩
 
@@ -355,8 +363,9 @@ def TMSAT.mem (Q : ℕ) (v : VarIndex tm) : Prop :=
 
 @[simp]
 lemma CNF.Clause.mem_map {α β : Type*} (v : α) (l : List β) (f : β → Literal α) :
-    CNF.Clause.Mem v (l.map f) ↔ ∃ x ∈ l, f x = (v, true) ∨ f x = (v, false) := by
-  simp [CNF.Clause.Mem]
+    CNF.Clause.VarMem v (CNF.Clause.ofLiterals (l.map f))
+    ↔ ∃ x ∈ l, f x = (v, true) ∨ f x = (v, false) := by
+  simp [CNF.Clause.VarMem_iff_exists_mem_literals]
   grind
 
 section TMSAT_VarMem
