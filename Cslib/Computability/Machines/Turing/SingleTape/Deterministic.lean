@@ -255,9 +255,11 @@ noncomputable instance : ListTransitionSystem (SingleTapeTM Symbol) Symbol Symbo
   init {t} := initCfg t
   output := extractOutput
 
+/-- A single-tape machine computing `f` with a bound on its runtime. -/
 abbrev TimeComputable (f : List Symbol → List Symbol)
   := IOTransitionSystem.TimeComputable (SingleTapeTM Symbol) f
 
+/-- A single-tape machine computing `f` with a polynomial bound on its runtime. -/
 abbrev PolyTimeComputable (f : List Symbol → List Symbol)
   := IOTransitionSystem.PolyTimeComputable (SingleTapeTM Symbol) f
 
@@ -268,20 +270,6 @@ lemma init_eq_initCfg (tm : SingleTapeTM Symbol) (l : List Symbol) :
 @[simp, scoped grind =]
 lemma output_eq_extractOutput (tm : SingleTapeTM Symbol) (c : tm.Cfg) :
   output (t := tm) c = extractOutput c := rfl
-
-/--
-The halt state of a `SingleTapeTM` is uniquele determined by its output as `tm.haltCfg l'`.
-@[simp, scoped grind =]
-lemma OutputsInTime.haltState_eq_haltCfg {tm : SingleTapeTM Symbol} {l : List Symbol}
-    {l' : List Symbol} {m : ℕ}
-    (ho : OutputsInTime tm l (some l') m) :
-    sorry = tm.haltCfg l' := by
-  obtain ⟨a, b⟩ := ho
-  have := ho.
-  simp [output, extractOutput] at this
-  grind
--/
-
 
 @[simp, scoped grind =]
 lemma red_eq_TransitionRelation (tm : SingleTapeTM Symbol) :
@@ -302,6 +290,17 @@ lemma OutputsInTime.of_RelatesInSteps {tm : SingleTapeTM Symbol} {l l' : List Sy
   }
   simp
 
+/-- Bounded output agrees with reaching the canonical halting configuration. -/
+lemma outputsInTime_iff {tm : SingleTapeTM Symbol} {l l' : List Symbol} {n : ℕ} :
+    OutputsInTime tm l (some l') n ↔
+      RelatesWithinSteps tm.TransitionRelation (tm.initCfg l) (tm.haltCfg l') n := by
+  constructor
+  · rintro ⟨run, hout⟩
+    have hhalt := haltCfg_of_extractOutput hout
+    simpa only [hhalt, TransitionSystem.EvalsToInTime, red_eq_TransitionRelation,
+      init_eq_initCfg] using run.evals_to
+  · exact OutputsInTime.of_RelatesInSteps
+
 /--
 This lemma bounds the size blow-up of the output of a Turing machine.
 It states that the increase in length of the output over the input is bounded by the runtime.
@@ -312,12 +311,9 @@ is bounded by the output length of the first machine.
 lemma output_length_le_input_length_add_time (tm : SingleTapeTM Symbol) (l l' : List Symbol)
     (t : ℕ) (h : OutputsInTime tm l (some l') t) :
     l'.length ≤ max 1 l.length + t := by
-  obtain ⟨run, h⟩ := h
-  have hspace_le := by simpa using
-    run.evals_to.apply_le_apply_add (Cfg.spaceUsed tm) (
-      fun a b hstep  ↦ Cfg.spaceUsed_step a b (Option.mem_def.mp hstep))
-  sorry
-  --grind
+  obtain ⟨steps, hsteps_le, hevals⟩ := outputsInTime_iff.mp h
+  grind [hevals.apply_le_apply_add (Cfg.spaceUsed tm)
+      fun a b hstep ↦ Cfg.spaceUsed_step a b (Option.mem_def.mp hstep)]
 
 end
 
@@ -516,11 +512,10 @@ def TimeComputable.comp {f g : List Symbol → List Symbol}
   -- perhaps it would be good to track the blow up separately?
   timeBound l := (hf.timeBound l) + hg.timeBound (max 1 l + hf.timeBound l)
   outputsFunInTmie a := OutputsInTime.of_RelatesInSteps (by
-    have hf_outputsFun := (hf.outputsFunInTmie a).evals_to
-    have hg_outputsFun := (hg.outputsFun (f a)).evals_to
-    simp only [init_eq_initCfg, initCfg, OutputsInTime.haltState_eq_haltCfg, haltCfg,
-      Function.comp_apply] at hg_outputsFun hf_outputsFun ⊢
-    -- The computer reduces a to f a in time hf.timeBound a.length
+    have hf_outputsFun := outputsInTime_iff.mp (hf.outputsFunInTmie a)
+    have hg_outputsFun := outputsInTime_iff.mp (hg.outputsFunInTmie (f a))
+    simp only [initCfg, compComputer_q₀_eq, Function.comp_apply,
+      haltCfg] at hg_outputsFun hf_outputsFun ⊢
     -- The computer reduces a to f a in time hf.timeBound a.length
     have h_a_reducesTo_f_a :
         RelatesWithinSteps (compComputer hf.t hg.t).TransitionRelation
@@ -543,7 +538,7 @@ def TimeComputable.comp {f g : List Symbol → List Symbol}
     refine Nat.add_le_add_left ?_ (hf.timeBound a.length)
     · apply h_mono
       -- Use the lemma about output length being bounded by input length + time
-      exact output_length_le_input_length_add_time hf.t _ _ _ (hf.outputsFun a)
+      exact output_length_le_input_length_add_time hf.t _ _ _ (hf.outputsFunInTmie a)
   )
 
 /--
@@ -555,7 +550,8 @@ def TimeComputable.withMonotoneBound {f : List Symbol → List Symbol}
   t := hf.t
   timeBound := partialSups hf.timeBound
   outputsFunInTmie a :=
-    RelatesWithinSteps.mono (le_partialSups hf.timeBound _) (hf.outputsFunInTmie a)
+    Computation.IOTransitionSystem.OutputsInTime.mono
+      (le_partialSups hf.timeBound _) (hf.outputsFunInTmie a)
 
 lemma TimeComputable.withMonotoneBound_timeBound_monotone {f : List Symbol → List Symbol}
     (hf : TimeComputable f) : Monotone hf.withMonotoneBound.timeBound :=
@@ -591,7 +587,7 @@ The polynomial bound is unchanged, since polynomial evaluation over `ℕ` is mon
 -/
 noncomputable def PolyTimeComputable.withMonotoneBound {f : List Symbol → List Symbol}
     (hf : PolyTimeComputable f) : PolyTimeComputable f where
-  toTimeComputable := hf.toTimeComputable.withMonotoneBound
+  toTimeComputable := TimeComputable.withMonotoneBound hf.toTimeComputable
   poly := hf.poly
   bounds _ := partialSups_le _ _ _ fun k hk => (hf.bounds k).trans (hf.poly.monotone_eval hk)
 
@@ -606,13 +602,13 @@ noncomputable def PolyTimeComputable.comp {f g : List Symbol → List Symbol}
     PolyTimeComputable (g ∘ f) where
   toTimeComputable :=
     TimeComputable.comp hf.toTimeComputable hg.withMonotoneBound.toTimeComputable
-      hg.toTimeComputable.withMonotoneBound_timeBound_monotone
+      (TimeComputable.withMonotoneBound_timeBound_monotone hg.toTimeComputable)
   poly := hf.poly + hg.poly.comp (1 + X + hf.poly)
   bounds n := by
     simp only [TimeComputable.comp, eval_add, eval_comp, eval_X, eval_one]
     apply add_le_add
     · exact hf.bounds n
-    · exact (hg.toTimeComputable.withMonotoneBound_timeBound_monotone
+    · exact ((TimeComputable.withMonotoneBound_timeBound_monotone hg.toTimeComputable)
         (add_le_add (by omega) (hf.bounds n))).trans (hg.withMonotoneBound.bounds _)
 
 end PolyTimeComputable

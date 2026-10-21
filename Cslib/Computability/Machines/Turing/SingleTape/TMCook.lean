@@ -27,7 +27,7 @@ namespace Turing
 namespace SingleTapeTM
 
 open Computation
-open TransitionMachine
+open IOTransitionSystem
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] (tm : SingleTapeTM Symbol)
 
@@ -155,14 +155,13 @@ def OutputsInTimeN (n : ℕ) (s s' : List Symbol) :=
 
 
 theorem output_iff_aux₁ (s s' : List Symbol) (n : ℕ) :
-    Nonempty (OutputsInTime tm n s s') → OutputsInTimeN tm n s s' := by
-  intro ⟨hout⟩
+    OutputsInTime tm s (some s') n → OutputsInTimeN tm n s s' := by
+  intro hout
   -- Let `m ≤ n` be the number of execution steps
-  obtain ⟨m, hm, hr⟩ := hout.evals_to
+  obtain ⟨m, hm, hr⟩ := outputsInTime_iff.mp hout
   obtain ⟨k, hn⟩ := Nat.exists_eq_add_of_le' hm
   have hrm : (tm.stepN^[m] (tm.initCfgN s)).toCfg = tm.haltCfg s' := by
-    rw [red_eq_TransitionRelation, init_eq_initCfg, OutputsInTime.haltState_eq_haltCfg,
-      TransitionRelation.eq_lambda, Relation.RelatesInSteps.function_Option_iff tm.step,
+    rw [TransitionRelation.eq_lambda, Relation.RelatesInSteps.function_Option_iff tm.step,
       ← initCfg_compatible_apply, ← step.compatible_apply_iterate, Option.some_inj] at hr
     · assumption
     · rw [hr]
@@ -172,9 +171,8 @@ theorem output_iff_aux₁ (s s' : List Symbol) (n : ℕ) :
   simp [OutputsInTimeN, runN, hrn]
 
 theorem output_iff_aux₂ (s s' : List Symbol) (n : ℕ) :
-    OutputsInTimeN tm n s s' → Nonempty (OutputsInTime tm n s s') := by
+    OutputsInTimeN tm n s s' → OutputsInTime tm s (some s') n := by
   intro hout
-  apply Nonempty.intro
   apply OutputsInTime.of_RelatesInSteps
   have hnone : ∃ m, (tm.runN m s).state = none := ⟨n, by rw [hout]; rfl⟩
   have hle : Nat.find hnone ≤ n := Nat.find_min' _ (by rw [hout]; rfl)
@@ -193,7 +191,7 @@ theorem output_iff_aux₂ (s s' : List Symbol) (n : ℕ) :
     · exact (Nat.find_min hnone (Nat.sub_one_lt hne0))
 
 theorem output_ff (s s' : List Symbol) (n : ℕ) :
-    OutputsInTimeN tm n s s' ↔ Nonempty (OutputsInTime tm n s s') :=
+    OutputsInTimeN tm n s s' ↔ OutputsInTime tm s (some s') n :=
   ⟨output_iff_aux₂ _ _ _ _, output_iff_aux₁ _ _ _ _⟩
 
 
