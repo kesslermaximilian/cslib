@@ -146,6 +146,18 @@ structure VerifiesInPolyTime₂ {Γ : Type} {τ : Type*} [IOTransitionSystem τ 
   -- Note: Depends on encoding Size defined on of `List Γ × List Γ`
   computes : IOTransitionSystem.ComputesInPolyTime t (Function.uncurry verifier.accepts)
 
+/-- Equivalent to `Option α`, but different naming -/
+inductive WithSeparator (α : Type u) where
+  /-- No value. -/
+  | separator : WithSeparator α
+  /-- Some value of type `α`. -/
+  | some (val : α) : WithSeparator α
+
+--instance PairEncoding {Γ : Type} {τ : Type*} {β : Type}
+--    [IOTransitionSystem τ (List (WithSeparator Γ)) β] : IOTransitionSystem τ (List Γ × List Γ) β where
+  --init w := init w.first w.second
+  --output w := sorry
+
 structure VerificationLanguageFor {Γ : Type} (l : Language Γ) where
   accepting : Language (Option Γ)
   existsAccepts (w : List Γ) : w ∈ l → ∃ (c : List Γ), List.combine w c ∈ accepting
