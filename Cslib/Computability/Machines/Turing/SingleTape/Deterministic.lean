@@ -9,7 +9,6 @@ module
 public import Cslib.Computability.Machines.ComputationModel.Basic
 public import Cslib.Foundations.Data.BiTape
 public import Cslib.Foundations.Data.Polynomial.Monotone
-public import Cslib.Foundations.Data.RelatesInSteps
 public import Cslib.Foundations.Relation.RelatesInSteps
 public import Mathlib.Algebra.Polynomial.Eval.Defs
 public import Mathlib.Order.PartialSups

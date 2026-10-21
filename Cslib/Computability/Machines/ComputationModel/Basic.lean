@@ -9,7 +9,7 @@ module
 public import Mathlib.Algebra.Polynomial.Eval.Defs
 public import Mathlib.Data.ENat.Lattice
 public import Mathlib.Logic.Function.Iterate
-public import Cslib.Foundations.Data.RelatesInSteps
+public import Cslib.Foundations.Relation.RelatesInSteps
 public import Cslib.Computability.Automata.Acceptors.Acceptor
 
 /-! # Transition Based Computation Models
