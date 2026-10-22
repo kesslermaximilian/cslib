@@ -149,10 +149,8 @@ structure Verifier {Γ : Type} (l : Language Γ) where
   -- (for turing machines, this is a corollary, but not generally)
   certSizeBound : Polynomial ℕ
   accept : List Γ → List Γ → Bool
-  existsAccepts (w : List Γ) :
-    w ∈ l → ∃ (c : List Γ), c.length ≤ certSizeBound.eval w.length ∧ accept w c
-  acceptsCorrect (w : List Γ) (c : List Γ) :
-    c.length ≤ certSizeBound.eval w.length → accept w c → w ∈ l
+  elem_iff_exists_cert (w : List Γ) :
+    w ∈ l ↔ ∃ (c : List Γ), c.length ≤ certSizeBound.eval w.length ∧ accept w c
 
 structure VerifiesInPolyTime {Γ : Type} {τ : Type*} [AcceptingTransitionSystem τ (Option Γ)]
     (t : τ) (l : Language Γ) where

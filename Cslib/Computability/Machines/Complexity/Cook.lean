@@ -140,7 +140,6 @@ theorem SAT₀_NP : Computation.VerifiableInPolyTime CNFSAT₀
   (AsAcceptor (Cslib.Turing.SingleTapeTM (Option ΓSAT))) := by
   sorry
 
-open scoped Classical in -- Needed for DecidableEq of state type of tm
 theorem SAT₀_NPComplete :
     Computation.IsNPComplete
       CNFSAT₀
@@ -152,11 +151,14 @@ theorem SAT₀_NPComplete :
 
       exact Nonempty.intro {
         f inst := by
+          -- TODO: Can we get [DecidableEq tm.State]?
+          classical
           let C := verifies.certSizeBound.eval inst.length
           let Q := max (verifies.time.eval inst.length) (inst.length + 1 + C)
           let Sat := Cslib.Turing.Cook.TMSAT₀ tm Q C inst ΓSAT.one
           exact SATEncoding.encode Sat
         f_correct inst := by
+          classical
           rw [SATEncoding.correct]
           rw [← Cslib.Turing.Cook.computation_iff_SAT₀ _ _ (by simp) sorry]
           simp_rw [Cslib.Turing.SingleTapeTM.output_ff]
