@@ -127,42 +127,71 @@ structure DecidesInPolyTime {Γ : Type} {τ : Type*} [AcceptingTransitionSystem 
   accepts (w : List Γ) : w ∈ l → AcceptsInTime t w (time.eval (R := ℕ) w.length)
   rejects (w : List Γ) : w ∉ l → RejectsInTime t w (time.eval (R := ℕ) w.length)
 
-structure Verifier {Γ : Type} (l : Language Γ) where
-  accepts : List Γ → List Γ → Bool
-  existsAccepts (w : List Γ) : w ∈ l → ∃ c, accepts w c = True
-  acceptsCorrect (w c: List Γ) : accepts w c = True → w ∈ l
 
--- More abstract version, since we don't talk about encoding
-structure VerifiesInPolyTime₂ {Γ : Type} {τ : Type*} [IOTransitionSystem τ (List Γ × List Γ) Bool]
-    (t : τ) (l : Language Γ)
-    where
-  verifier : Verifier l
-  -- Note: Depends on encoding Size defined on of `List Γ × List Γ`
-  computes : IOTransitionSystem.ComputesInPolyTime t (Function.uncurry verifier.accepts)
-
-/-- Equivalent to `Option α`, but different naming -/
-inductive WithSeparator (α : Type u) where
-  /-- No value. -/
-  | separator : WithSeparator α
-  /-- Some value of type `α`. -/
-  | some (val : α) : WithSeparator α
 
 --instance PairEncoding {Γ : Type} {τ : Type*} {β : Type}
 --    [IOTransitionSystem τ (List (WithSeparator Γ)) β] : IOTransitionSystem τ (List Γ × List Γ) β
 --  where
 --init w := init w.first w.second
 --output w := sorry
-
+/-
 structure VerificationLanguageFor {Γ : Type} (l : Language Γ) where
+  certSizeBound : Polynomial ℕ
   accepting : Language (Option Γ)
-  existsAccepts (w : List Γ) : w ∈ l → ∃ (c : List Γ), List.combine w c ∈ accepting
-  acceptsCorrect (w : List Γ) (c : List Γ) : List.combine w c ∈ accepting → w ∈ l
+  existsAccepts (w : List Γ) :
+    w ∈ l → ∃ (c : List Γ), c.length ≤ certSizeBound.eval w.length ∧ List.combine w c ∈ accepting
+  acceptsCorrect (w : List Γ) (c : List Γ) :
+    c.length ≤ certSizeBound.eval w.length → List.combine w c ∈ accepting → w ∈ l
+-/
 
+structure Verifier {Γ : Type} (l : Language Γ) where
+  -- Polynomial bound of certificate size wrt instance size
+  -- (for turing machines, this is a corollary, but not generally)
+  certSizeBound : Polynomial ℕ
+  accept : List Γ → List Γ → Bool
+  existsAccepts (w : List Γ) :
+    w ∈ l → ∃ (c : List Γ), c.length ≤ certSizeBound.eval w.length ∧ accept w c
+  acceptsCorrect (w : List Γ) (c : List Γ) :
+    c.length ≤ certSizeBound.eval w.length → accept w c → w ∈ l
 
 structure VerifiesInPolyTime {Γ : Type} {τ : Type*} [AcceptingTransitionSystem τ (Option Γ)]
     (t : τ) (l : Language Γ) where
-  language : VerificationLanguageFor l
-  verifies : DecidesInPolyTime t language.accepting
+  verifier : Verifier l
+  time : Polynomial ℕ
+  -- Pairing instance -> certificate -> accept
+  computesAccept (w c : List Γ) : c.length ≤ verifier.certSizeBound.eval w.length
+    → verifier.accept w c → AcceptsInTime t (List.combine w c) (time.eval (R := ℕ) w.length)
+  computesReject (w c : List Γ) : c.length ≤ verifier.certSizeBound.eval w.length →
+    ¬ verifier.accept w c → RejectsInTime t (List.combine w c) (time.eval (R := ℕ) w.length)
+
+-- More abstract version, since we don't talk about encoding
+structure VerifiesInPolyTime₂ {Γ : Type} {τ : Type*} [IOTransitionSystem τ (List Γ × List Γ) Bool]
+    (t : τ) (l : Language Γ)
+    where
+  verifier : Verifier l
+  --computes : IOTransitionSystem.ComputesInPolyTime t (Function.uncurry verifier.accept)
+  time : Polynomial ℕ
+  computesAccept (w c : List Γ) : c.length ≤ verifier.certSizeBound.eval w.length
+    → verifier.accept w c
+    → IOTransitionSystem.OutputsInTime t (w, c) (some true) (time.eval (R := ℕ) w.length)
+  computesReject (w c : List Γ) : c.length ≤ verifier.certSizeBound.eval w.length
+    → ¬ verifier.accept w c
+    → IOTransitionSystem.OutputsInTime t (w, c) (some true) (time.eval (R := ℕ) w.length)
+
+structure WithTwoInputs (τ : Type*) where
+  t : τ
+
+instance {Γ Γ' : Type} {τ : Type*} [IOTransitionSystem τ (List (Option Γ)) Γ'] :
+    IOTransitionSystem (WithTwoInputs τ) (List Γ × List Γ) Γ'  where
+  cfg a := TransitionSystem.cfg a.t
+  red := TransitionSystem.red
+  init w := InputTransitionSystem.init (List.combine w.fst w.snd)
+  output := IOTransitionSystem.output
+
+-- Bridging the two definitions
+abbrev VerifiesInPolyTime₃ {Γ : Type} {τ : Type*} [AcceptingTransitionSystem τ (Option Γ)]
+    (t : τ) (l : Language Γ) :=
+    VerifiesInPolyTime₂ (⟨t⟩ : WithTwoInputs τ) l
 
 
 def DecidableInPolyTime {Γ : Type} (l : Language Γ) (τ : Type*) [AcceptingTransitionSystem τ Γ]
@@ -206,7 +235,7 @@ structure IsNPComplete {Γ : Type} (l : Language Γ) (τO : Type*)
     (τT : Type*) [ListTransitionSystem τT Γ Γ] where
   elemNP : l ∈ PolyTimeVerifiableLanguages Γ τO
   transforms (l' : Language Γ): l' ∈ PolyTimeVerifiableLanguages Γ τO
-    → Nonempty (PolyTimeTransformable τT l l')
+    → Nonempty (PolyTimeTransformable τT l' l)
 
 
 -- TODO: Can we even prove this in this generality?

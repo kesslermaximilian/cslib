@@ -18,7 +18,7 @@ public import Std.Sat.CNF
 
 
 -/
-
+@[expose] public section
 
 namespace Std.Sat
 
@@ -843,7 +843,7 @@ def tripleFinEquiv (a b c : ℕ) : Fin a × Fin b × Fin c ≃ Fin (a * (b * c))
   ((Equiv.refl (Fin a)).prodCongr finProdFinEquiv).trans finProdFinEquiv
 
 /-- Number the bounded state and tape variables using finite alphabet enumerations. -/
-def myEquiv
+def TMSAT.FinEquiv
     {State Symbol : Type*}
     (Q s t : ℕ)
     (eState : State ≃ Fin s)
@@ -883,7 +883,8 @@ def TMSAT.relabel_aux (Q : ℕ) : VarIndex tm →
 variable (tm) in
 noncomputable def TMSAT.relabel (Q : ℕ) : VarIndex tm → Fin (num_vars tm Q) :=
   fun v => Fin.cast (by simp only [num_vars, Nat.mul_assoc, Nat.add_assoc])
-    (myEquiv Q _ _ (Fintype.equivFin tm.State) (Fintype.equivFin Symbol) (relabel_aux tm Q v))
+    (TMSAT.FinEquiv Q _ _ (Fintype.equivFin tm.State) (Fintype.equivFin Symbol)
+      (relabel_aux tm Q v))
 
 variable (tm) in
 lemma TMSAT.relabel_inj {Q C : ℕ} (inst : List Symbol) (accept : Symbol)
@@ -901,9 +902,7 @@ lemma TMSAT.relabel_inj {Q C : ℕ} (inst : List Symbol) (accept : Symbol)
   all_goals
     simp only [TMSAT.mem, tapeIndices, Int.mem_range_iff] at h₁ h₂
     simp (disch := omega) only [Nat.mod_eq_of_lt] at haux
-    obtain ⟨rfl, hn, rfl⟩ := haux
-    congr 1
-    omega
+    grind
 
 variable (tm) in
 def TMSAT₀ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) : CNF (Fin (TMSAT.num_vars tm Q)) :=

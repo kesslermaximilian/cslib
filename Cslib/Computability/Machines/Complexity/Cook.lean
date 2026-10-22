@@ -14,6 +14,7 @@ public import Mathlib.Data.Int.Range
 public import Mathlib.Data.Fintype.Sum
 public import Mathlib.Tactic.Linarith
 public import Mathlib.Tactic.DeriveFintype
+public import Mathlib.Computability.Encoding
 public import Std.Sat.CNF
 
 /-!
@@ -109,12 +110,20 @@ instance : DenoteAcceptance ΓSAT where
   accept_ne_reject := ne_of_beq_false rfl
 
 
-def encodeAsBool {Γ : Type} [Fintype Γ] : Γ → List Bool := sorry
-
+/-- Language of satisfiable SAT formulas -/
 def CNFSAT₀ : Language ΓSAT := sorry
 
--- SAT as a language, but now in the boolean alphabet
+/-- Binary encoding of a finite alphabet as bools -/
+def encodeAsBool {Γ : Type} [Fintype Γ] : Γ → List Bool := sorry
+
+/-- Language of satisfiable SAT formulas in the boolean alphabet -/
 def CNFSAT : Language Bool := { w.flatMap encodeAsBool | w ∈ CNFSAT₀}
+
+/-- Encode a CNF Sat instance with a finite number of variables in the ΓSAT alphabet. -/
+def SATEncoding {n : ℕ} : Computability.Encoding (Std.Sat.CNF (Fin n)) ΓSAT := sorry
+
+theorem SATEncoding.correct {n : ℕ} (c : Std.Sat.CNF (Fin n)) :
+  (SATEncoding.encode c) ∈ CNFSAT₀ ↔ ¬ Std.Sat.CNF.Unsat c := sorry
 
 
 -- Example on how we we turn single tape tms into acceptors now
@@ -131,6 +140,7 @@ theorem SAT₀_NP : Computation.VerifiableInPolyTime CNFSAT₀
   (AsAcceptor (Cslib.Turing.SingleTapeTM (Option ΓSAT))) := by
   sorry
 
+open scoped Classical in -- Needed for DecidableEq of state type of tm
 theorem SAT₀_NPComplete :
     Computation.IsNPComplete
       CNFSAT₀
@@ -138,14 +148,25 @@ theorem SAT₀_NPComplete :
       (Cslib.Turing.SingleTapeTM ΓSAT) where
     elemNP := SAT₀_NP
     transforms l hl := by
-      obtain ⟨⟨tm⟩, ⟨l', h⟩⟩ := hl
+      obtain ⟨⟨tm⟩, ⟨verifies⟩⟩ := hl
 
-
-
-
-      sorry
-
-
+      exact Nonempty.intro {
+        f inst := by
+          let C := verifies.certSizeBound.eval inst.length
+          let Q := max (verifies.time.eval inst.length) (inst.length + 1 + C)
+          let Sat := Cslib.Turing.Cook.TMSAT₀ tm Q C inst ΓSAT.one
+          exact SATEncoding.encode Sat
+        f_correct inst := by
+          rw [SATEncoding.correct]
+          rw [← Cslib.Turing.Cook.computation_iff_SAT₀ _ _ (by simp) sorry]
+          simp_rw [Cslib.Turing.SingleTapeTM.output_ff]
+          -- TODO: finish proof here using existing
+          -- also probably refactor into own proof
+          sorry
+        computable := by
+          -- This is hard to show, want to use λ-calculus for it
+          sorry
+      }
 
 
 

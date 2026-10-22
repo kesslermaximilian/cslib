@@ -105,6 +105,7 @@ class IOTransitionSystem (τ : Type u) (α β : outParam Type) extends InputTran
   output {t : τ} : cfg t → Option β
 
 abbrev ListTransitionSystem (τ : Type*) (Γᵢ Γₒ : Type) := IOTransitionSystem τ (List Γᵢ) (List Γₒ)
+-- TODO: Could potentially have this be more general in first argument, only fix second one to bool
 abbrev AcceptingTransitionSystem (τ : Type*) (Γᵢ : Type) := IOTransitionSystem τ (List Γᵢ) Bool
 
 open InputTransitionSystem
