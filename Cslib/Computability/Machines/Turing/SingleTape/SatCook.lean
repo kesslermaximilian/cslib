@@ -8,6 +8,7 @@ module
 public import Cslib.Computability.Machines.Turing.SingleTape.Defs
 public import Cslib.Computability.Machines.Turing.SingleTape.TMCook
 public import Mathlib.Data.Int.Range
+public import Mathlib.Logic.Equiv.Fin.Basic
 public import Mathlib.Tactic.Linarith
 public import Std.Sat.CNF
 
@@ -836,6 +837,63 @@ lemma computation_iff_SAT {Q C : ℕ} (inst : List Symbol) (accept : Symbol)
     · simp [TMSAT] at ha; grind
     · rw [hrun Q (by rfl)]
       exact hHalt c hlen
+
+#synth Fintype Symbol
+#synth Fintype tm.State
+
+
+def myEquiv
+    {State Symbol : Type*}
+    (Q s t : ℕ)
+    (eState : State ≃ Fin s)
+    (eSymbol : Symbol ≃ Fin t) :
+    (Fin (Q + 1) × Fin (2 * Q + 3) × Option State) ⊕
+    (Fin (Q + 1) × Fin (2 * Q + 3) × Option (Option Symbol))
+      ≃
+    Fin ((Q + 1) * ((2 * Q + 3) * (s + 1)) +
+         (Q + 1) * ((2 * Q + 3) * ((t + 1) + 1))) := by
+
+  -- establish equivalence using compositions of mathlib equivalences
+  -- for sum, product and successor of `Fin n`
+
+  let e₁ : Option State ≃ Fin (s + 1) :=
+    sorry
+
+  let e₂ : Option (Option Symbol) ≃ Fin ((t + 1) + 1) :=
+    sorry
+
+  let left :=
+    ((Equiv.refl (Fin (Q + 1))).prodCongr
+      ((Equiv.refl (Fin (2 * Q + 3))).prodCongr e₁)).trans
+        (tripleFinEquiv (Q + 1) (2 * Q + 3) (s + 1))
+
+  let right :=
+    ((Equiv.refl (Fin (Q + 1))).prodCongr
+      ((Equiv.refl (Fin (2 * Q + 3))).prodCongr e₂)).trans
+        (tripleFinEquiv (Q + 1) (2 * Q + 3) ((t + 1) + 1))
+
+  exact (left.sumCongr right).trans finSumFinEquiv
+
+variable (tm) in
+def TMSAT.num_vars (Q : ℕ) : ℕ :=
+  (Q + 1) * (2 * Q + 3) * (Fintype.card tm.State + 1)
+  + (Q + 1) * (2 * Q + 3) * (Fintype.card Symbol + 2)
+
+variable (tm) in
+def TMSAT.relabel_aux (Q : ℕ) : VarIndex tm →
+  (Fin (Q + 1) × Fin (2 * Q + 3) × Option tm.State)
+  ⊕ (Fin (Q + 1) × Fin (2 * Q + 3) × Option (Option Symbol))
+  | VarIndex.state t n a => Sum.inl (Fin.ofNat _ t, Fin.ofNat _ (n + Q).toNat, a)
+  | VarIndex.tape t n s => Sum.inr (Fin.ofNat _ t, Fin.ofNat _ (n + Q).toNat, s)
+
+variable (tm) in
+def TMSAT.relabel : (Fin (Q + 1) × Fin (2 * Q + 3) × Option tm.State)
+    ⊕ (Fin (Q + 1) × Fin (2 * Q + 3) × Option (Option Symbol)) ≃
+    Fin (num_vars tm Q)  := by
+  -- compose relabel_aux with the equivalence above
+  sorry
+
+
 
 end
 end Cook

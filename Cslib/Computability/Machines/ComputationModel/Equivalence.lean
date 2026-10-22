@@ -6,23 +6,21 @@ Authors: Maximilian Keßler
 
 module
 
-public import Mathlib.Algebra.Polynomial.Eval.Defs
-public import Mathlib.Data.ENat.Lattice
-public import Mathlib.Logic.Function.Iterate
-public import Cslib.Foundations.Relation.RelatesInSteps
-public import Cslib.Computability.Machines.ComputationModel.Basic
-public import Mathlib.Computability.Language
 public import Cslib.Computability.Automata.Acceptors.Acceptor
+public import Cslib.Computability.Machines.ComputationModel.Basic
+public import Cslib.Foundations.Relation.RelatesInSteps
 public import Mathlib.Algebra.MvPolynomial.Basic
 public import Mathlib.Algebra.MvPolynomial.Eval
+public import Mathlib.Algebra.Polynomial.Eval.Defs
+public import Mathlib.Computability.Language
+public import Mathlib.Data.ENat.Lattice
+public import Mathlib.Logic.Function.Iterate
+public import Cslib.Foundations.Data.List.Combine
 
 /-! test-/
 
 @[expose] public section
 
-/-- Combine two lists by embedding them into an amended alphabet with a separator. -/
-def List.combine {Γ : Type} (fst : List Γ) (snd : List Γ) : List (Option Γ) :=
-  fst.map Option.some ++ [none] ++ snd.map Option.some
 
 namespace Computation
 
@@ -119,10 +117,6 @@ def ResourceNoSpacePolynomials : Set (ResourceUsage → ℕ) :=
 def ResourceSpacePolynomials : Set (ResourceUsage → ℕ) :=
   {f | ∃ (P : Polynomial ℕ), f = P.eval ∘ ResourceUsage.space}
 
-
-namespace AcceptingTransitionSystem
-
-
 open AcceptingTransitionSystem
 
 /-- "Proof" that the specified tm decides the language `l` in polynomial time. -/
@@ -167,7 +161,6 @@ structure VerificationLanguageFor {Γ : Type} (l : Language Γ) where
 
 structure VerifiesInPolyTime {Γ : Type} {τ : Type*} [AcceptingTransitionSystem τ (Option Γ)]
     (t : τ) (l : Language Γ) where
-  time : Polynomial ℕ
   language : VerificationLanguageFor l
   verifies : DecidesInPolyTime t language.accepting
 
@@ -208,9 +201,9 @@ structure PolyTimeTransformable {Γ Γ' : Type} (τ : Type*) [ListTransitionSyst
   computable : IOTransitionSystem.PolyTimeComputable τ f
 
 
-structure IsNPComplete {Γ : Type} (l : Language Γ) (τO τT : Type*)
+structure IsNPComplete {Γ : Type} (l : Language Γ) (τO : Type*)
     [AcceptingTransitionSystem τO (Option Γ)]
-    [ListTransitionSystem τT Γ Γ] where
+    (τT : Type*) [ListTransitionSystem τT Γ Γ] where
   elemNP : l ∈ PolyTimeVerifiableLanguages Γ τO
   transforms (l' : Language Γ): l' ∈ PolyTimeVerifiableLanguages Γ τO
     → Nonempty (PolyTimeTransformable τT l l')
@@ -274,5 +267,4 @@ theorem P_constant {Γ : Type} (τ τ' : Type*) [AcceptingTransitionSystem τ Γ
   <;> apply P_constant_aux
   <;> assumption
 
-end AcceptingTransitionSystem
 end Computation

@@ -7,6 +7,7 @@ module
 
 public import Cslib.Computability.Machines.Turing.SingleTape.Defs
 public import Cslib.Computability.Machines.Turing.SingleTape.Deterministic
+public import Cslib.Foundations.Data.List.Combine
 public import Mathlib.Data.Nat.Find
 public import Mathlib.Tactic.Ring
 
@@ -19,8 +20,6 @@ public import Mathlib.Tactic.Ring
 
 @[expose] public section
 
-def List.combine {α : Type*} (l₁ : List α) (l₂ : List α) : List (Option α) :=
-  l₁.map some ++ [none] ++ l₂.map some
 
 namespace Cslib
 namespace Turing
