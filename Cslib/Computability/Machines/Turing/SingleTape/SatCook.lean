@@ -887,11 +887,31 @@ def TMSAT.relabel_aux (Q : ℕ) : VarIndex tm →
   | VarIndex.tape t n s => Sum.inr (Fin.ofNat _ t, Fin.ofNat _ (n + Q).toNat, s)
 
 variable (tm) in
-def TMSAT.relabel : (Fin (Q + 1) × Fin (2 * Q + 3) × Option tm.State)
-    ⊕ (Fin (Q + 1) × Fin (2 * Q + 3) × Option (Option Symbol)) ≃
-    Fin (num_vars tm Q)  := by
-  -- compose relabel_aux with the equivalence above
+noncomputable def TMSAT.relabel (Q : ℕ) : VarIndex tm → Fin (num_vars tm Q) :=
+  -- compose relabel_aux with the equivalence above, choosing Fintype.equivFin
+  -- for State and Symbol to instantiate the equivalence
   sorry
+
+variable (tm) in
+lemma TMSAT.relabel_inj {Q C : ℕ} (inst : List Symbol) (accept : Symbol)
+    (hQ : inst.length + 1 + C ≤ Q) :
+    ∀ {v1 v2}, CNF.VarMem v1 (TMSAT tm Q C inst accept) → CNF.VarMem v2 (TMSAT tm Q C inst accept)
+    → TMSAT.relabel tm Q v1 = TMSAT.relabel tm Q v2 → v1 = v2 := by
+  sorry
+
+variable (tm) in
+def TMSAT₀ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) : CNF (Fin (TMSAT.num_vars tm Q)) :=
+  CNF.relabel (TMSAT.relabel tm Q) (TMSAT tm Q C inst accept)
+
+lemma computation_iff_SAT₀ {Q C : ℕ} (inst : List Symbol) (accept : Symbol)
+    (hQ : inst.length + 1 + C ≤ Q)
+    (hHalt : ∀ (c : List Symbol), c.length = C → tm.HaltsInTimeN Q (List.combine inst c)) :
+    (∃ (c : List Symbol), c.length = C
+      ∧ SingleTapeTM.OutputsInTimeN tm Q (List.combine inst c) [accept])
+    ↔ ¬ CNF.Unsat (TMSAT₀ tm Q C inst accept) := by
+  rw [TMSAT₀, CNF.unsat_relabel_iff (TMSAT.relabel_inj tm inst accept hQ),
+    computation_iff_SAT inst accept hQ hHalt]
+  simp [CNF.unsat_iff_not_sat]
 
 
 
