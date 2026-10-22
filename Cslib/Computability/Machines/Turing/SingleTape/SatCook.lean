@@ -838,10 +838,11 @@ lemma computation_iff_SAT {Q C : ℕ} (inst : List Symbol) (accept : Symbol)
     · rw [hrun Q (by rfl)]
       exact hHalt c hlen
 
-#synth Fintype Symbol
-#synth Fintype tm.State
+/-- Flatten a product of three finite index types. -/
+def tripleFinEquiv (a b c : ℕ) : Fin a × Fin b × Fin c ≃ Fin (a * (b * c)) :=
+  ((Equiv.refl (Fin a)).prodCongr finProdFinEquiv).trans finProdFinEquiv
 
-
+/-- Number the bounded state and tape variables using finite alphabet enumerations. -/
 def myEquiv
     {State Symbol : Type*}
     (Q s t : ℕ)
@@ -852,26 +853,19 @@ def myEquiv
       ≃
     Fin ((Q + 1) * ((2 * Q + 3) * (s + 1)) +
          (Q + 1) * ((2 * Q + 3) * ((t + 1) + 1))) := by
-
-  -- establish equivalence using compositions of mathlib equivalences
-  -- for sum, product and successor of `Fin n`
-
   let e₁ : Option State ≃ Fin (s + 1) :=
-    sorry
-
+    (Equiv.optionCongr eState).trans (finSuccEquiv s).symm
   let e₂ : Option (Option Symbol) ≃ Fin ((t + 1) + 1) :=
-    sorry
-
+    (Equiv.optionCongr ((Equiv.optionCongr eSymbol).trans (finSuccEquiv t).symm)).trans
+      (finSuccEquiv (t + 1)).symm
   let left :=
     ((Equiv.refl (Fin (Q + 1))).prodCongr
       ((Equiv.refl (Fin (2 * Q + 3))).prodCongr e₁)).trans
         (tripleFinEquiv (Q + 1) (2 * Q + 3) (s + 1))
-
   let right :=
     ((Equiv.refl (Fin (Q + 1))).prodCongr
       ((Equiv.refl (Fin (2 * Q + 3))).prodCongr e₂)).trans
         (tripleFinEquiv (Q + 1) (2 * Q + 3) ((t + 1) + 1))
-
   exact (left.sumCongr right).trans finSumFinEquiv
 
 variable (tm) in
@@ -888,16 +882,28 @@ def TMSAT.relabel_aux (Q : ℕ) : VarIndex tm →
 
 variable (tm) in
 noncomputable def TMSAT.relabel (Q : ℕ) : VarIndex tm → Fin (num_vars tm Q) :=
-  -- compose relabel_aux with the equivalence above, choosing Fintype.equivFin
-  -- for State and Symbol to instantiate the equivalence
-  sorry
+  fun v => Fin.cast (by simp only [num_vars, Nat.mul_assoc, Nat.add_assoc])
+    (myEquiv Q _ _ (Fintype.equivFin tm.State) (Fintype.equivFin Symbol) (relabel_aux tm Q v))
 
 variable (tm) in
 lemma TMSAT.relabel_inj {Q C : ℕ} (inst : List Symbol) (accept : Symbol)
     (hQ : inst.length + 1 + C ≤ Q) :
     ∀ {v1 v2}, CNF.VarMem v1 (TMSAT tm Q C inst accept) → CNF.VarMem v2 (TMSAT tm Q C inst accept)
     → TMSAT.relabel tm Q v1 = TMSAT.relabel tm Q v2 → v1 = v2 := by
-  sorry
+  intro v₁ v₂ h₁ h₂ heq
+  have haux : relabel_aux tm Q v₁ = relabel_aux tm Q v₂ := by
+    simpa only [relabel, Fin.cast_inj, Equiv.apply_eq_iff_eq] using heq
+  have h₁ := (Mem_TMSAT tm Q C inst accept hQ v₁).mp h₁
+  have h₂ := (Mem_TMSAT tm Q C inst accept hQ v₂).mp h₂
+  cases v₁ <;> cases v₂ <;>
+    simp only [relabel_aux, Sum.inl.injEq, Sum.inr.injEq, reduceCtorEq,
+      Prod.mk.injEq, Fin.ext_iff, Fin.val_ofNat] at haux
+  all_goals
+    simp only [TMSAT.mem, tapeIndices, Int.mem_range_iff] at h₁ h₂
+    simp (disch := omega) only [Nat.mod_eq_of_lt] at haux
+    obtain ⟨rfl, hn, rfl⟩ := haux
+    congr 1
+    omega
 
 variable (tm) in
 def TMSAT₀ (Q C : ℕ) (inst : List Symbol) (accept : Symbol) : CNF (Fin (TMSAT.num_vars tm Q)) :=
