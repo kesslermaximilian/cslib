@@ -159,6 +159,10 @@ lemma RelatesInSteps.map {α α' : Type*}
   | tail t' t'' m _ hstep ih =>
     exact .tail (g _) (g t') (g t'') m ih (hg t' t'' hstep)
 
+/--
+If the relation `r` is given by function application, i.e. `r a b := f a = b`, RelatesInSteps
+is equivalent to repeated function application.
+-/
 lemma RelatesInSteps.function_iff {α : Type*} {f : α → α} {a b : α} {n : ℕ} :
     RelatesInSteps (fun a b => f a = b) a b n ↔ f^[n] a = b := by
   induction n generalizing b with
@@ -166,6 +170,10 @@ lemma RelatesInSteps.function_iff {α : Type*} {f : α → α} {a b : α} {n : �
   | succ n ih =>
     simp [RelatesInSteps.succ_iff, ih, ← Function.iterate_succ_apply']
 
+/--
+If the relation `r` is given by partial function application, i.e. `r a b := f a = some b`,
+RelatesInSteps is equivalent to repeated partial function application (in the `Option` monad).
+-/
 lemma RelatesInSteps.function_Option_iff {α : Type*} {a b : α} {n : ℕ} (f : α → Option α) :
     RelatesInSteps (fun a b => f a = some b) a b n ↔ (flip bind f)^[n] a = some b := by
   induction n generalizing b with
