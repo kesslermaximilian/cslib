@@ -11,6 +11,7 @@ public import Mathlib.Data.ENat.Lattice
 public import Mathlib.Logic.Function.Iterate
 public import Cslib.Foundations.Relation.RelatesInSteps
 public import Cslib.Computability.Automata.Acceptors.Acceptor
+public import Cslib.Computability.Machines.ComputationModel.EncodingSize
 
 /-! # Transition Based Computation Models
 
@@ -56,25 +57,6 @@ We could then introduce abbreviations for `EvalsTo` or `Outputs` that insert `ω
 @[expose] public section
 
 namespace Computation
-
-/- Means that there is a reasonable notion of "size" on input / output. -/
-class EncodingSize (Γ : Type) where
-  encodingSize : Γ → ℕ
-
-instance (Γ : Type) [EncodingSize Γ] : EncodingSize (Option Γ) where
-  encodingSize x := if h : x.isSome then 1 + EncodingSize.encodingSize (x.get h) else 1
-
-instance (Γ : Type) : EncodingSize (List Γ) where
-  encodingSize l := l.length
-
-instance (Γ : Type) : EncodingSize (List Γ × List Γ) where
-  encodingSize p := p.fst.length + p.snd.length + 1
-
-instance : EncodingSize Unit where
-  encodingSize _ := 0
-
-instance : EncodingSize Bool where
-  encodingSize _ := 1
 
 open EncodingSize
 
