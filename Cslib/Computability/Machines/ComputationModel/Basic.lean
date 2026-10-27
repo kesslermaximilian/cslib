@@ -10,8 +10,10 @@ public import Mathlib.Algebra.Polynomial.Eval.Defs
 public import Mathlib.Data.ENat.Lattice
 public import Mathlib.Logic.Function.Iterate
 public import Cslib.Foundations.Relation.RelatesInSteps
+public import Cslib.Foundations.Semantics.LTS.Basic
 public import Cslib.Computability.Automata.Acceptors.Acceptor
 public import Cslib.Computability.Machines.ComputationModel.EncodingSize
+
 
 /-! # Transition Based Computation Models
 
@@ -58,6 +60,8 @@ We could then introduce abbreviations for `EvalsTo` or `Outputs` that insert `ω
 
 namespace Computation
 
+open Cslib
+
 open EncodingSize
 
 /--
@@ -65,39 +69,41 @@ For each element `(t : τ)`, there is a bundle of a type `cfg t` with a step / t
 `cfg t → Option (cfg t)`.
 -/
 class TransitionSystem (τ : Type u) where
+  /-- Configuration type (or state type) associated with a computer -/
   cfg (t : τ) : Type v
-  red {t : τ} : cfg t → cfg t → Prop
+  /-- Label type associated with the LTS of a computer -/
+  label (t : τ) : Type w
+  /-- Resulting LTS of a computer -/
+  lts (t : τ) : LTS (cfg t) (label t)
 
 class SpaceSize (τ : Type u) [TransitionSystem τ] where
   space_used {t : τ} : TransitionSystem.cfg t → ℕ
 
 /--
-Bundles a `TransitionSystem` with input and output functions from/to words over an alphabet.
-This way, we can think of elements of `τ` as allowing computations `List Γᵢ → List Γₒ`
-by lifting inputs into the computation context, iterating the `step` function,
-and taking output from this computation context.
+Bundles a `TransitionSystem` with input and output functions from/to types `α` and `β`.
+This way, we can think of elements of `τ` as allowing computations `α → β` by lifting inputs into
+the computation context, using the reduction relation and taking output from this computation
+context.
 -/
--- TODO: combine these again, since we use outParam
-class InputTransitionSystem (τ : Type u) (α : outParam Type) extends TransitionSystem τ where
-  init {t : τ} : α → cfg t
-
-class IOTransitionSystem (τ : Type u) (α β : outParam Type) extends InputTransitionSystem τ α
+class IOTransitionSystem (τ : Type u) (α β : outParam Type) extends TransitionSystem τ
     where
-  -- TODO: Use option here, since that is mathematically more correct
+  init {t : τ} : α → cfg t
   output {t : τ} : cfg t → Option β
 
+/-- An `IOTransitionSystem` between `List Γᵢ` and `List Γₒ`. -/
 abbrev ListTransitionSystem (τ : Type*) (Γᵢ Γₒ : Type) := IOTransitionSystem τ (List Γᵢ) (List Γₒ)
--- TODO: Could potentially have this be more general in first argument, only fix second one to bool
-abbrev AcceptingTransitionSystem (τ : Type*) (Γᵢ : Type) := IOTransitionSystem τ (List Γᵢ) Bool
 
-open InputTransitionSystem
+-- An `IOTransitionSystem` between `α` and `Bool`
+abbrev AcceptingTransitionSystem (τ : Type*) (α : Type) := IOTransitionSystem τ α Bool
+
 open IOTransitionSystem
 
 namespace TransitionSystem
 
 variable {τ : Type u} [TransitionSystem τ]
 
-def EvalsTo (t : τ) (a b : cfg t) := Relation.ReflTransGen red a b
+--def EvalsTo (t : τ) (a b : cfg t) := Relation.ReflTransGen red a b
+def EvalsTo (t : τ) (a b : cfg t) := LTS.CanReach (lts t) a b
 
 /--
 The machine `t` reaches `b` from `a` in at most `n` steps.
@@ -126,10 +132,10 @@ theorem EvalsToInTime.of_le (h : EvalsToInTime t a b n₁) (hn : n₁ ≤ n₂) 
 
 end TransitionSystem
 
-namespace InputTransitionSystem
+namespace IOTransitionSystem
 open TransitionSystem
 
-variable {τ : Type*} {α : Type} [InputTransitionSystem τ α]
+variable {τ : Type*} {α β : Type} [IOTransitionSystem τ α β]
 
 /--
 A valid execution sequence that halts.
@@ -171,17 +177,6 @@ theorem HaltsInTime.mono {t : τ} {l : α} : Monotone (HaltsInTime t l ·) := by
   intro _ _ hnm ⟨h⟩
   exact ⟨h.mono hnm⟩
 
-
-end InputTransitionSystem
-
-
-namespace IOTransitionSystem
-open InputTransitionSystem
-
-variable {τ : Type*} {α β : Type}
-section
-variable [IOTransitionSystem τ α β]
-
 def Outputs (t : τ) (l : α) (l' : Option β) :=
   ∃ (run : HaltingRun t l), output run.haltState = l'
 
@@ -202,8 +197,6 @@ def ComputesInTime [EncodingSize α] (t : τ) (f : α → β) (time : ℕ → �
 def ComputesInPolyTime [EncodingSize α] (t : τ) (f : α → β) :=
   ∃ (P : Polynomial ℕ), ComputesInTime t f P.eval
 
-end
-
 /--
 "Proof" that `f` is computable by the system `τ`.
 A witness machine is bundled as part of this structure,
@@ -222,41 +215,35 @@ structure PolyTimeComputable {Γ Γ' : Type} [EncodingSize Γ]
 
 end IOTransitionSystem
 
+
 namespace AcceptingTransitionSystem
-open Cslib.Automata
-
-
-variable {τ : Type*} {Γᵢ : Type} [AcceptingTransitionSystem τ Γᵢ]
-
+--open Cslib.Automata
 /- Every `AcceptingTransitionSystem` is canonically an Acceptor. -/
-instance : Acceptor τ Γᵢ where
-  Accepts t l := ∃ (run : HaltingRun t l), output run.haltState = Option.some true
+--instance : Acceptor τ Γᵢ where
+--  Accepts t l := ∃ (run : HaltingRun t l), output run.haltState = Option.some true
 
-abbrev AcceptsInTime (t : τ) (l : List Γᵢ) (n : ℕ) :=
+variable {τ : Type*} {α : Type} [AcceptingTransitionSystem τ α]
+
+
+abbrev AcceptsInTime (t : τ) (l : α) (n : ℕ) :=
   OutputsInTime t l (Option.some true) n
 
-abbrev AcceptsInTimeAndSpace [SpaceSize τ] (t : τ) (l : List Γᵢ) (n : ℕ) (s : ℕ) :=
+abbrev AcceptsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ) :=
   OutputsInTimeAndSpace t l (Option.some true) n s
 
-abbrev RejectsInTime (t : τ) (l : List Γᵢ) (n : ℕ) :=
+abbrev RejectsInTime (t : τ) (l : α) (n : ℕ) :=
   OutputsInTime t l (Option.some false) n
 
-abbrev RejectsInTimeAndSpace [SpaceSize τ] (t : τ) (l : List Γᵢ) (n : ℕ) (s : ℕ) :=
+abbrev RejectsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ) :=
   OutputsInTimeAndSpace t l Option.none n s
 
---abbrev DecidesInTime (t : τ) (l : List Γᵢ) (P : Prop) (n : ℕ) :=
---  OutputsInTime t l ⟨P, fun _ => ()⟩ n
-
---abbrev DecidesInTimeAndSpace [SpaceSize τ] (t : τ) (l : List Γᵢ) (P : Prop) (n : ℕ) (s : ℕ) :=
---  OutputsInTimeAndSpace t l ⟨P, fun _ => ()⟩ n s
-
-theorem AcceptsInTime.mono {t : τ} {l : List Γᵢ} : Monotone (AcceptsInTime t l · ) :=
+theorem AcceptsInTime.mono {t : τ} {l : α} : Monotone (AcceptsInTime t l · ) :=
   OutputsInTime.mono
 
-theorem RejectsInTime.mono {t : τ} {l : List Γᵢ} : Monotone (AcceptsInTime t l · ) :=
+theorem RejectsInTime.mono {t : τ} {l : α} : Monotone (AcceptsInTime t l · ) :=
   OutputsInTime.mono
 
-theorem DecidesInTime.mono {t : τ} {l : List Γᵢ} : Monotone (AcceptsInTime t l · ) :=
+theorem DecidesInTime.mono {t : τ} {l : α} : Monotone (AcceptsInTime t l · ) :=
   OutputsInTime.mono
 
 end AcceptingTransitionSystem
