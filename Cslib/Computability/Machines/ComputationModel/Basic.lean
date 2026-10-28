@@ -103,26 +103,24 @@ def EvalsTo (t : τ) (a b : cfg t) := LTS.CanReach (lts t) a b
 The machine `t` reaches `b` from `a` in at most `n` steps.
 -/
 def EvalsToInTime (t : τ) (a b : cfg t) (n : ℕ) :=
-  ∃ μs, μs.length ≤ n ∧ (lts t).MTr a μs b
+  LTS.CanReachIn (lts t) a b n
 
 variable {t : τ} {a b c : cfg t} {n n₁ n₂ : ℕ}
 
 lemma EvalsTo.refl : EvalsTo t a a := LTS.CanReach.refl (lts t) a
 
 lemma EvalsTo.trans (h₁ : EvalsTo t a b) (h₂ : EvalsTo t b c) : EvalsTo t a c
-  := LTS.CanReach.trans _ h₁ h₂
+  := LTS.CanReach.trans h₁ h₂
 
 lemma EvalsToInTime.refl : EvalsToInTime t a a 0 := LTS.CanReachIn.refl _ _
 
 lemma EvalsToInTime.trans (h₁ : EvalsToInTime t a b n₁) (h₂ : EvalsToInTime t b c n₂) :
-    EvalsToInTime t a c (n₁ + n₂) := LTS.CanReachIn.trans _ h₁ h₂
+    EvalsToInTime t a c (n₁ + n₂) := LTS.CanReachIn.trans h₁ h₂
 
 lemma EvalsToInTime.mono : Monotone (EvalsToInTime t a b ·) := LTS.CanReachIn.mono _
 
 /-- A bounded execution also witnesses unbounded reachability. -/
-theorem EvalsToInTime.evalsTo (h : EvalsToInTime t a b n) : EvalsTo t a b := by
-  obtain ⟨μs, _, hmtr⟩ := h
-  exact ⟨μs, hmtr⟩
+theorem EvalsToInTime.evalsTo (h : EvalsToInTime t a b n) : EvalsTo t a b := h.toCanReach
 
 /- Recover the counted-relation API by forgetting transition labels. -/
 --theorem evalsToInTime_iff_relatesWithinSteps :

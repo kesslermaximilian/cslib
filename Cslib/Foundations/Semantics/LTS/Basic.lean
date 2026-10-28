@@ -211,6 +211,7 @@ theorem CanReach.refl (s : State) : lts.CanReach s s := by
   exists []
   apply MTr.refl
 
+variable {lts} in
 /-- Transitivity of `CanReach`. -/
 @[scoped grind .]
 theorem CanReach.trans {s1 s2 s3 : State} (h₁ : lts.CanReach s1 s2) (h₂ : lts.CanReach s2 s3) :
@@ -225,12 +226,19 @@ theorem CanReach.trans {s1 s2 s3 : State} (h₁ : lts.CanReach s1 s2) (h₂ : lt
 def CanReachIn (s1 s2 : State) (n : ℕ) : Prop :=
   ∃ μs, μs.length ≤ n ∧ lts.MTr s1 μs s2
 
+variable {lts} in
+lemma CanReachIn.toCanReach {s1 s2 : State} {n : ℕ} (h : lts.CanReachIn s1 s2 n) :
+    lts.CanReach s1 s2 := by
+  obtain ⟨μs, _, h⟩ := h
+  exact ⟨μs, h⟩
+
 /-- Any state can reach itself in zero transitions. -/
 @[scoped grind .]
 theorem CanReachIn.refl (s : State) : lts.CanReachIn s s 0 := by
   use []
   exact ⟨by simp, MTr.refl⟩
 
+variable {lts} in
 /-- Transitivity of `CanReachIn` in sum of steps. -/
 @[scoped grind .]
 theorem CanReachIn.trans {s1 s2 s3 : State} {n m : ℕ} (h₁ : lts.CanReachIn s1 s2 n)
