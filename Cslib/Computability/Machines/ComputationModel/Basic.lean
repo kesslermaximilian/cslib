@@ -10,6 +10,7 @@ public import Mathlib.Algebra.Polynomial.Eval.Defs
 public import Cslib.Foundations.Relation.RelatesInSteps
 public import Cslib.Foundations.Semantics.LTS.Relation
 public import Cslib.Foundations.Semantics.LTS.Execution
+public import Cslib.Foundations.Relation.Termination
 public import Cslib.Computability.Automata.Acceptors.Acceptor
 public import Cslib.Computability.Machines.ComputationModel.EncodingSize
 
@@ -17,31 +18,42 @@ public import Cslib.Computability.Machines.ComputationModel.EncodingSize
 /-! # Computation models based on labelled transition systems
 
 Each computer `t` has a configuration type `cfg t`, a label type `label t`, and
-an `LTS (cfg t) (label t)`. `IOTransitionSystem` adds an initial configuration
+an `LTS (cfg t) (label t)`. `IOComputationModel` adds an initial configuration
 for each input and a partial output function.
 
 Execution uses the existing LTS API: `EvalsTo` is `LTS.CanReach`, and
 `EvalsToInTime` witnesses an `LTS.MTr` whose list of labels has length at most
 the time bound. Every transition counts as one step, regardless of its label.
-Halting means that the final configuration satisfies `LTS.IsTerminal`.
-These predicates express the existence of an execution; they do not require
-that every execution terminate or that the LTS be deterministic.
+`HaltsFrom` uses strong normalization of the underlying unlabelled relation:
+every computation from the given configuration must be finite. `HaltsFromInTime`
+bounds every execution prefix, so it also excludes infinite computations.
+Neither definition assumes determinism or fairness.
+
+`HaltingRun` bundles a finite execution ending at an `LTS.IsTerminal` configuration.
+`MayOutput` asserts the existence of such a run with a given output. In contrast,
+`Outputs` requires every computation to terminate and every terminal run to agree
+on the output. `OutputUnique` expresses agreement alone and permits divergence.
+Agreement on `none` means no output is available; computing a value uses `some`.
+Nondeterministic acceptance uses an existential accepting run together with a
+universal execution bound; rejecting branches are allowed.
 
 ## Main declarations
 
-- `TransitionSystem`: configuration types, label types, and an LTS for each computer.
-- `IOTransitionSystem`: a transition system with input initialization and partial output.
+- `ComputationModel`: configuration types, label types, and an LTS for each computer.
+- `IOComputationModel`: a computation model with input initialization and partial output.
+- `ComputationModel.HaltsFrom`, `ComputationModel.HaltsFromInTime`: universal termination
+  from a configuration, optionally with a uniform bound on execution length.
 - `TransitionSystem.EvalsTo`, `TransitionSystem.EvalsToInTime`: reachability and
   time-bounded reachability in the associated LTS.
-- `IOTransitionSystem.HaltingRun`, `IOTransitionSystem.HaltingRunInTime`: reachable
+- `IOComputationModel.HaltingRun`, `IOComputationModel.HaltingRunInTime`: reachable
   terminal configurations, optionally with a bound on the number of transitions.
-- `IOTransitionSystem.OutputsInTime`: output of a halting execution within a time bound.
-- `IOTransitionSystem.TimeComputable`, `IOTransitionSystem.PolyTimeComputable`:
+- `IOComputationModel.OutputsInTime`: a universal time bound and agreement on output.
+- `IOComputationModel.TimeComputable`, `IOComputationModel.PolyTimeComputable`:
   computers bundled with bounds on the time needed to compute a function.
 
-The time-and-space records currently bound only the final configuration's
-space usage. A bound on space throughout an execution requires the intermediate
-states recorded by `LTS.Execution` and is left for a separate development.
+Time-and-space bounds apply to every state in every execution prefix, including
+the initial configuration. Each existential `HaltingRunInTimeAndSpace` separately
+records the space used along its particular run.
 -/
 
 @[expose] public section
@@ -61,11 +73,12 @@ class ComputationModel (τ : Type u) where
   /-- Resulting LTS of a computer -/
   lts (t : τ) : LTS (cfg t) (label t)
 
+/-- Configurations of this `ComputationModel` have a notion of space occupied, measured in `ℕ`. -/
 class SpaceSize (τ : Type u) [ComputationModel τ] where
   space_used {t : τ} : ComputationModel.cfg t → ℕ
 
 /--
-Bundles a `TransitionSystem` with input and output functions from/to types `α` and `β`.
+Bundles a `ComputationModel` with input and output functions from/to types `α` and `β`.
 This way, we can think of elements of `τ` as allowing computations `α → β` by lifting inputs into
 the computation context, following labelled transitions and taking output from this computation
 context.
@@ -77,24 +90,68 @@ class IOComputationModel (τ : Type u) (α β : outParam Type) extends Computati
 
 -- Configuration and label universes are independent and occur together in these aliases.
 set_option linter.checkUnivs false in
-/-- An `IOTransitionSystem` between `List Γᵢ` and `List Γₒ`. -/
+/-- An `IOComputationModel` between `List Γᵢ` and `List Γₒ`. -/
 abbrev ListCM (τ : Type*) (Γᵢ Γₒ : Type) := IOComputationModel τ (List Γᵢ) (List Γₒ)
 
 set_option linter.checkUnivs false in
-/-- An `IOTransitionSystem` between `α` and `Bool`.
-`True` and `False` denote acceptance and rejection. -/
+/-- An `IOComputationModel` between `α` and `Bool`.
+`true` and `false` denote acceptance and rejection. -/
 abbrev AcceptingCM (τ : Type*) (α : Type) := IOComputationModel τ α Bool
 
 set_option linter.checkUnivs false in
-/-- An `IOTransitionSystem` between `List Γ` and `Bool`.
-`True` and `False` denote acceptance and rejection. -/
+/-- An `IOComputationModel` between `List Γ` and `Bool`.
+`true` and `false` denote acceptance and rejection. -/
 abbrev ListAcceptingCM (τ : Type*) (Γ : Type) := IOComputationModel τ (List Γ) Bool
 
-open ComputationModel
-
-namespace TransitionSystem
+namespace ComputationModel
 
 variable {τ : Type u} [ComputationModel τ]
+
+/-- Every execution starting at `a` is finite, for every nondeterministic choice. -/
+def HaltsFrom (t : τ) (a : cfg t) : Prop :=
+  Relation.SN (lts t).UnlabelledTr a
+
+/-- Every execution prefix starting at `a` contains at most `n` transitions. -/
+def HaltsFromInTime (t : τ) (a : cfg t) (n : ℕ) : Prop :=
+  ∀ ⦃μs : List (label t)⦄ ⦃b : cfg t⦄, (lts t).MTr a μs b → μs.length ≤ n
+
+variable {t : τ} {a b : cfg t} {n : ℕ}
+
+/-- Universal halting is preserved by reachability. -/
+theorem HaltsFrom.of_canReach (h : HaltsFrom t a) (hab : (lts t).CanReach a b) :
+    HaltsFrom t b :=
+  h.of_rel_reflTransGen ((lts t).reflTransGen_unlabelledTr_iff.mpr hab)
+
+/-- Execution bounds can be increased. -/
+theorem HaltsFromInTime.mono : Monotone (HaltsFromInTime t a ·) :=
+  fun _ _ hnm h _ _ hex => (h hex).trans hnm
+
+/-- Taking successor state reduces time bound by one. -/
+theorem HaltsFromInTime.succ {a b : (cfg t)} {μ : (label t)} (h : HaltsFromInTime t a (n + 1))
+    (htr : (lts t).Tr a μ b) : HaltsFromInTime t b n := by
+  intro _ _ hmtr
+  simpa using h (hmtr.stepL htr)
+
+theorem HaltsFromInTime.haltsFrom (h : HaltsFromInTime t a n) : HaltsFrom t a := by
+  induction n generalizing a with
+  | zero =>
+      apply Relation.SN.of_normal
+      intro ⟨_, _, htr⟩
+      simpa using h (LTS.MTr.single _ htr)
+  | succ n ih =>
+      apply Relation.SN.intro
+      rintro b ⟨_, htr⟩
+      exact ih (HaltsFromInTime.succ h htr)
+
+/-- Halting in time zero is the same as being a terminal configuration -/
+theorem haltsFromInTime_zero_iff : HaltsFromInTime t a 0 ↔ (lts t).IsTerminal a := by
+  constructor
+  · intro h _ _ htr
+    simpa using h (LTS.MTr.single _ htr)
+  · intro h _ _ hex
+    cases hex with
+    | refl => simp
+    | stepL htr _ => exact (h _ _ htr).elim
 
 /-- Reachability in the computer's labelled transition system. -/
 def EvalsTo (t : τ) (a b : cfg t) := LTS.CanReach (lts t) a b
@@ -127,7 +184,7 @@ theorem EvalsToInTime.evalsTo (h : EvalsToInTime t a b n) : EvalsTo t a b := h.t
     --EvalsToInTime t a b n ↔ Relation.RelatesWithinSteps (lts t).UnlabelledTr a b n :=
   --(lts t).relatesWithinSteps_unlabelledTr_iff.symm
 
-end TransitionSystem
+end ComputationModel
 
 namespace IOComputationModel
 open ComputationModel
@@ -150,12 +207,34 @@ A valid execution sequence that halts within time bound `n`.
 structure HaltingRunInTime (t : τ) (l : α) (n : ℕ) extends HaltingRun t l where
   lengthBound : μs.length ≤ n
 
+/-- A terminal run whose length and every visited state's space usage respect the bounds. -/
 structure HaltingRunInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ)
     extends HaltingRunInTime t l n where
   size_bound : ∀ state ∈ ss, SpaceSize.space_used state ≤ s
 
-def Halts (t : τ) (l : α) :=
+/-- At least one computation on `l` reaches a terminal configuration. -/
+def MayHalt (t : τ) (l : α) : Prop :=
   Nonempty (HaltingRun t l)
+
+/-- Every computation on `l` terminates. No uniform time bound is asserted. -/
+def Halts (t : τ) (l : α) : Prop :=
+  HaltsFrom t (init l)
+
+/-- Universal halting guarantees that at least one terminal run exists. -/
+theorem Halts.mayHalt {t : τ} {l : α} (h : Halts t l) : MayHalt t l := by
+  obtain ⟨haltState, hr, hnormal⟩ := h.normalizable
+  obtain ⟨μs, hex⟩ := (lts t).reflTransGen_unlabelledTr_iff.mp hr
+  obtain ⟨ss, hss⟩ := LTS.Execution.of_mTr hex
+  exact Nonempty.intro {
+    μs := μs
+    ss := ss
+    haltState := haltState
+    haltState_halts := by
+      intro μ c _
+      apply hnormal
+      use c, μ
+    isExecution := hss
+  }
 
 /--
 Time bounds of `HaltingRunInTime` can be increased.
@@ -169,26 +248,105 @@ def HaltingRunInTime.mono {t : τ} {n m : ℕ} {l : α} (hnm : n ≤ m)
   isExecution := hv.isExecution
   lengthBound := Nat.le_trans hv.lengthBound hnm
 
-def HaltsInTime (t : τ) (l : α) (n : ℕ) :=
+/-- At least one computation terminates within `n` transitions. -/
+def MayHaltInTime (t : τ) (l : α) (n : ℕ) : Prop :=
   Nonempty (HaltingRunInTime t l n)
 
-theorem HaltsInTime.mono {t : τ} {l : α} : Monotone (HaltsInTime t l ·) := by
-  intro _ _ hnm ⟨h⟩
-  exact ⟨h.mono hnm⟩
+/-- Every computation on `l` terminates within `n` transitions. -/
+def HaltsInTime (t : τ) (l : α) (n : ℕ) : Prop :=
+  HaltsFromInTime t (init l) n
 
-def Outputs (t : τ) (l : α) (l' : Option β) :=
+theorem HaltsInTime.mono {t : τ} {l : α} : Monotone (HaltsInTime t l ·) := by
+  exact HaltsFromInTime.mono
+
+/-- A uniform time bound implies universal halting. -/
+theorem HaltsInTime.halts {t : τ} {l : α} {n : ℕ} (h : HaltsInTime t l n) :
+    Halts t l := h.haltsFrom
+
+/-- A universally bounded computation has a terminal run within the bound. -/
+theorem HaltsInTime.mayHaltInTime {t : τ} {l : α} {n : ℕ} (h : HaltsInTime t l n) :
+    MayHaltInTime t l n := by
+  obtain ⟨run⟩ := h.halts.mayHalt
+  exact Nonempty.intro {
+    toHaltingRun := run
+    lengthBound := h run.isExecution.to_mTr
+  }
+
+/-- All execution prefixes respect both the time and space bounds. -/
+def HaltsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n s : ℕ) : Prop :=
+  HaltsInTime t l n ∧ ∀ ⦃μs : List (label t)⦄ ⦃b : cfg t⦄ ⦃ss : List (cfg t)⦄,
+    (lts t).Execution (init l) μs b ss → ∀ state ∈ ss, SpaceSize.space_used state ≤ s
+
+/-- Some terminal computation has the specified output, regardless of other branches. -/
+def MayOutput (t : τ) (l : α) (l' : Option β) : Prop :=
   ∃ (run : HaltingRun t l), output run.haltState = l'
 
-def OutputsInTime (t : τ) (l : α) (l' : Option β) (n : ℕ) :=
+/-- Some computation produces the specified output within the time bound. -/
+def MayOutputInTime (t : τ) (l : α) (l' : Option β) (n : ℕ) : Prop :=
   ∃ (run : HaltingRunInTime t l n), output run.haltState = l'
 
-def OutputsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (l' : Option β) (n : ℕ) (s : ℕ) :=
+/-- Some computation produces the specified output within the time and space bounds. -/
+def MayOutputInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (l' : Option β)
+    (n s : ℕ) : Prop :=
   ∃ (run : HaltingRunInTimeAndSpace t l n s), output run.haltState = l'
+
+/-- All terminal computations agree, without asserting termination of every branch. -/
+def OutputUnique (t : τ) (l : α) : Prop :=
+  ∀ run₁ run₂ : HaltingRun t l, output run₁.haltState = output run₂.haltState
+
+/-- Every computation terminates, and every terminal computation has output `l'`.
+`none` records agreement on absence of an output; use `some b` for a computed value. -/
+def Outputs (t : τ) (l : α) (l' : Option β) : Prop :=
+  Halts t l ∧ ∀ run : HaltingRun t l, output run.haltState = l'
+
+/-- Every computation terminates within the bound and has the specified output. -/
+def OutputsInTime (t : τ) (l : α) (l' : Option β) (n : ℕ) : Prop :=
+  HaltsInTime t l n ∧ ∀ run : HaltingRun t l, output run.haltState = l'
+
+/-- All computations respect both bounds and agree on their output. -/
+def OutputsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (l' : Option β)
+    (n s : ℕ) : Prop :=
+  HaltsInTimeAndSpace t l n s ∧ ∀ run : HaltingRun t l, output run.haltState = l'
+
+/-- The output predicate determines at most one result. -/
+theorem Outputs.unique {t : τ} {l : α} {b c : Option β}
+    (hb : Outputs t l b) (hc : Outputs t l c) : b = c := by
+  obtain ⟨run⟩ := hb.1.mayHalt
+  rw [← hb.2 run, hc.2 run]
+
+theorem Outputs.mayOutput {t : τ} {l : α} {b : Option β} (h : Outputs t l b) :
+    MayOutput t l b := by
+  obtain ⟨run⟩ := h.1.mayHalt
+  exact ⟨run, h.2 run⟩
+
+theorem Outputs.outputUnique {t : τ} {l : α} {b : Option β} (h : Outputs t l b) :
+    OutputUnique t l :=
+  fun run₁ run₂ => (h.2 run₁).trans (h.2 run₂).symm
+
+/-- A computation has an output if and only if it halts and output is unique. -/
+theorem exists_outputs_iff {t : τ} {l : α} :
+    (∃ b, Outputs t l b) ↔ Halts t l ∧ OutputUnique t l := by
+  constructor
+  · rintro ⟨b, h⟩
+    exact ⟨h.1, h.outputUnique⟩
+  · rintro ⟨hhalt, hagree⟩
+    obtain ⟨run⟩ := hhalt.mayHalt
+    exact ⟨output run.haltState, hhalt, fun run' => hagree run' run⟩
+
+/-- Forgetting a time bound preserves the output. -/
+theorem OutputsInTime.outputs {t : τ} {l : α} {b : Option β} {n : ℕ}
+    (h : OutputsInTime t l b n) : Outputs t l b := ⟨h.1.halts, h.2⟩
+
+/-- A universal output within a time bound is attained by a run within that bound. -/
+theorem OutputsInTime.mayOutputInTime {t : τ} {l : α} {b : Option β} {n : ℕ}
+    (h : OutputsInTime t l b n) : MayOutputInTime t l b n := by
+  obtain ⟨run⟩ := h.1.mayHaltInTime
+  exact ⟨run, h.2 run.toHaltingRun⟩
 
 theorem OutputsInTime.mono {t : τ} {l : α} {l' : Option β} : Monotone (OutputsInTime t l l' · )
     := by
-  intro _ _ hnm ⟨h, heq⟩
-  exact ⟨h.mono hnm, heq⟩
+  intro _ _ hnm h
+  exact ⟨HaltsInTime.mono hnm h.1, h.2⟩
 
 def ComputesInTime [EncodingSize α] (t : τ) (f : α → β) (time : ℕ → ℕ) :=
   ∀ (l : α), OutputsInTime t l (some (f l)) (time (EncodingSize.encodingSize l))
@@ -220,26 +378,36 @@ open IOComputationModel
 
 variable {τ : Type*} {α : Type} [AcceptingCM τ α]
 
-abbrev AcceptsInTime (t : τ) (l : α) (n : ℕ) :=
-  OutputsInTime t l (Option.some true) n
+/-- Every branch halts within the bound, and at least one branch accepts. -/
+def AcceptsInTime (t : τ) (l : α) (n : ℕ) : Prop :=
+  HaltsInTime t l n ∧ MayOutput t l (some true)
 
-abbrev AcceptsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ) :=
-  OutputsInTimeAndSpace t l (Option.some true) n s
+/--
+Every branch respects both bounds, and at least one branch accepts.
+Note that this is _weaker_ than `OutputsInTime t l (some true) n`, since we allow for computations
+that reject or fail as well.
+-/
+def AcceptsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ) : Prop :=
+  HaltsInTimeAndSpace t l n s ∧ MayOutput t l (some true)
 
-abbrev RejectsInTime (t : τ) (l : α) (n : ℕ) :=
-  OutputsInTime t l (Option.some false) n
+/-- Every branch halts within the bound and rejects. -/
+abbrev RejectsInTime (t : τ) (l : α) (n : ℕ) := OutputsInTime t l (some false) n
 
+/-- Every branch respects both bounds and rejects. -/
 abbrev RejectsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ) :=
-  OutputsInTimeAndSpace t l Option.none n s
+  OutputsInTimeAndSpace t l (some false) n s
 
 theorem AcceptsInTime.mono {t : τ} {l : α} : Monotone (AcceptsInTime t l · ) :=
+  fun _ _ hnm h => ⟨HaltsInTime.mono hnm h.1, h.2⟩
+
+theorem RejectsInTime.mono {t : τ} {l : α} : Monotone (RejectsInTime t l · ) :=
   OutputsInTime.mono
 
-theorem RejectsInTime.mono {t : τ} {l : α} : Monotone (AcceptsInTime t l · ) :=
-  OutputsInTime.mono
-
-theorem DecidesInTime.mono {t : τ} {l : α} : Monotone (AcceptsInTime t l · ) :=
-  OutputsInTime.mono
+/-- Universal rejection excludes an accepting branch. -/
+theorem RejectsInTime.not_acceptsInTime {t : τ} {l : α} {n m : ℕ}
+    (h : RejectsInTime t l n) : ¬ AcceptsInTime t l m := by
+  rintro ⟨_, run, hout⟩
+  simp [h.2 run] at hout
 
 end AcceptingCM
 

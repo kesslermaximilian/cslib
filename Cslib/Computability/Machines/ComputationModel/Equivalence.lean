@@ -124,6 +124,7 @@ structure DecidesInPolyTime {Γ : Type} {τ : Type*} [ListAcceptingCM τ Γ] (t 
   (l : Language Γ) where
   /-- A time function bounding execution time dependent on input size. -/
   time : Polynomial ℕ
+  /-- Decision as computation of a Boolean requires agreement on accepting inputs too. -/
   accepts (w : List Γ) : w ∈ l → AcceptsInTime t w (time.eval (R := ℕ) w.length)
   rejects (w : List Γ) : w ∉ l → RejectsInTime t w (time.eval (R := ℕ) w.length)
 
