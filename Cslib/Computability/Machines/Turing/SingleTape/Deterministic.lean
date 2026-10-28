@@ -249,7 +249,7 @@ section
 open Computation
 open IOTransitionSystem
 
-noncomputable instance : ListTransitionSystem (SingleTapeTM Symbol) Symbol Symbol where
+noncomputable instance : ListCM (SingleTapeTM Symbol) Symbol Symbol where
   cfg := Cfg
   red {t} c c' := t.step c = some c'
   init {t} := initCfg t

@@ -80,7 +80,10 @@ public import Cslib.Computability.Languages.RegularLanguage
 public import Cslib.Computability.Languages.SafetyLiveness
 public import Cslib.Computability.Languages.Slice
 public import Cslib.Computability.Languages.SyntacticMonoid
+public import Cslib.Computability.Machines.ComputationModel.Acceptor
 public import Cslib.Computability.Machines.ComputationModel.Basic
+public import Cslib.Computability.Machines.ComputationModel.EncodingSize
+public import Cslib.Computability.Machines.ComputationModel.Equivalence
 public import Cslib.Computability.Machines.Turing.MultiTape.Combinators.AlmostConstant
 public import Cslib.Computability.Machines.Turing.MultiTape.Combinators.Id
 public import Cslib.Computability.Machines.Turing.MultiTape.ConfigBound

@@ -31,7 +31,7 @@ abbrev FunctionModelT := Type -> Type -> Type*
 
 class ComputationModel (M : FunctionModelT) (InType : outParam (Type -> Type))
     (OutType : outParam (Type -> Type)) where
-  transitionSystem: ∀ Γ Γ', IOTransitionSystem.{u, v} (M Γ Γ') (InType Γ) (OutType Γ')
+  transitionSystem: ∀ Γ Γ', IOComputationModel.{u, v} (M Γ Γ') (InType Γ) (OutType Γ')
 
 class SpaceComputationModel (M : FunctionModelT) (InType : outParam (Type -> Type))
     (OutType : outParam (Type -> Type)) extends ComputationModel M InType OutType where
@@ -54,7 +54,7 @@ namespace ComputationModel
 
 -- General instance exposing the typeclass synthesis
 instance (M : FunctionModelT) (InType OutType : Type -> Type) [ComputationModel M InType OutType]
-    (Γ Γ' : Type): IOTransitionSystem (M Γ Γ') (InType Γ) (OutType Γ') :=
+    (Γ Γ' : Type): IOComputationModel (M Γ Γ') (InType Γ) (OutType Γ') :=
   ComputationModel.transitionSystem Γ Γ'
 
 -- General instance exposing the typeclass synthesis

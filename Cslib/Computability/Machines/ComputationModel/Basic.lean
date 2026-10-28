@@ -7,53 +7,41 @@ Authors: Maximilian Keßler
 module
 
 public import Mathlib.Algebra.Polynomial.Eval.Defs
-public import Mathlib.Data.ENat.Lattice
-public import Mathlib.Logic.Function.Iterate
 public import Cslib.Foundations.Relation.RelatesInSteps
-public import Cslib.Foundations.Semantics.LTS.Basic
+public import Cslib.Foundations.Semantics.LTS.Relation
+public import Cslib.Foundations.Semantics.LTS.Execution
 public import Cslib.Computability.Automata.Acceptors.Acceptor
 public import Cslib.Computability.Machines.ComputationModel.EncodingSize
 
 
-/-! # Transition Based Computation Models
+/-! # Computation models based on labelled transition systems
 
-Defines typeclasses and definitions for computation systems based on a transition function
-`step : cfg → Option cfg`, where `cfg` is the type of configurations of such a system.
-Additionally, we bundle this with input/output functions from/to words over an alphabet
-to obtain a model of computation between lists of symbols that has a notion of execution time
-(given by the needed number of applications of the `step` function).
+Each computer `t` has a configuration type `cfg t`, a label type `label t`, and
+an `LTS (cfg t) (label t)`. `IOTransitionSystem` adds an initial configuration
+for each input and a partial output function.
 
-The main example of such a transition machine are turing machines:
-Typical turing models work by inputting a word (over a fixed alphabet)
-on a specific tape, then iterating a step function until an accepting state is reached,
-and the output is defined as a word (potentially over a different alphabet than the input),
-typically read from a specific tape.
-For all such turing machines (independent of the exact design choices), we can define instances
-to `TransitionMachine` and thereby use the same definitions of computation and time for all
-models, and in particular state equivalences of such computation models.
+Execution uses the existing LTS API: `EvalsTo` is `LTS.CanReach`, and
+`EvalsToInTime` witnesses an `LTS.MTr` whose list of labels has length at most
+the time bound. Every transition counts as one step, regardless of its label.
+Halting means that the final configuration satisfies `LTS.IsTerminal`.
+These predicates express the existence of an execution; they do not require
+that every execution terminate or that the LTS be deterministic.
 
-## Design
+## Main declarations
 
-- Termination of such a machine is modeled by the step function yielding `none`
-- We expose the alphabet types in the definition of `TransitionMachine`.
-- The output function is *partial* in the sense that it can return `none`. In this case,
-  there is no output of a computation (this can occur even if the computation terminates).
+- `TransitionSystem`: configuration types, label types, and an LTS for each computer.
+- `IOTransitionSystem`: a transition system with input initialization and partial output.
+- `TransitionSystem.EvalsTo`, `TransitionSystem.EvalsToInTime`: reachability and
+  time-bounded reachability in the associated LTS.
+- `IOTransitionSystem.HaltingRun`, `IOTransitionSystem.HaltingRunInTime`: reachable
+  terminal configurations, optionally with a bound on the number of transitions.
+- `IOTransitionSystem.OutputsInTime`: output of a halting execution within a time bound.
+- `IOTransitionSystem.TimeComputable`, `IOTransitionSystem.PolyTimeComputable`:
+  computers bundled with bounds on the time needed to compute a function.
 
-## Important declarations
-- `TransitionSystem τ`: Terms `(t : τ)` have an associated *configuration type* `cfg t`
-- `TransitionMachine τ Γᵢ Γₒ`: In addition to this being a `TransitionSystem τ`, there is
-  - an input function `init : List Γᵢ → cfg t`
-  - an output function `output : cfg t → Option (List Γₒ)`
-- `OutputsInTime t n l l'`: States that `t` outputs `l'` from `l` in at most `n` steps.
-- `ComputesInPolyTime t f`: The machine `t` computes the function `f : List Γᵢ → List Γₒ` in
-  polynomial time.
-
-## TODO:
-It might be useful to work with `ℕ∞` instead of `ℕ` for predicates such as `EvalsToInTime`.
-This would allow us to recover the regular notion of `EvalsTo` (without time constraints)
-as the special case of the time bound `ω`.
-We could then introduce abbreviations for `EvalsTo` or `Outputs` that insert `ω`.
-
+The time-and-space records currently bound only the final configuration's
+space usage. A bound on space throughout an execution requires the intermediate
+states recorded by `LTS.Execution` and is left for a separate development.
 -/
 
 @[expose] public section
@@ -64,11 +52,8 @@ open Cslib
 
 open EncodingSize
 
-/--
-For each element `(t : τ)`, there is a bundle of a type `cfg t` with a step / transition function
-`cfg t → Option (cfg t)`.
--/
-class TransitionSystem (τ : Type u) where
+/-- A configuration type, label type, and labelled transition system for each computer. -/
+class ComputationModel (τ : Type u) where
   /-- Configuration type (or state type) associated with a computer -/
   cfg (t : τ) : Type v
   /-- Label type associated with the LTS of a computer -/
@@ -76,87 +61,100 @@ class TransitionSystem (τ : Type u) where
   /-- Resulting LTS of a computer -/
   lts (t : τ) : LTS (cfg t) (label t)
 
-class SpaceSize (τ : Type u) [TransitionSystem τ] where
-  space_used {t : τ} : TransitionSystem.cfg t → ℕ
+class SpaceSize (τ : Type u) [ComputationModel τ] where
+  space_used {t : τ} : ComputationModel.cfg t → ℕ
 
 /--
 Bundles a `TransitionSystem` with input and output functions from/to types `α` and `β`.
 This way, we can think of elements of `τ` as allowing computations `α → β` by lifting inputs into
-the computation context, using the reduction relation and taking output from this computation
+the computation context, following labelled transitions and taking output from this computation
 context.
 -/
-class IOTransitionSystem (τ : Type u) (α β : outParam Type) extends TransitionSystem τ
+class IOComputationModel (τ : Type u) (α β : outParam Type) extends ComputationModel τ
     where
   init {t : τ} : α → cfg t
   output {t : τ} : cfg t → Option β
 
+-- Configuration and label universes are independent and occur together in these aliases.
+set_option linter.checkUnivs false in
 /-- An `IOTransitionSystem` between `List Γᵢ` and `List Γₒ`. -/
-abbrev ListTransitionSystem (τ : Type*) (Γᵢ Γₒ : Type) := IOTransitionSystem τ (List Γᵢ) (List Γₒ)
+abbrev ListCM (τ : Type*) (Γᵢ Γₒ : Type) := IOComputationModel τ (List Γᵢ) (List Γₒ)
 
--- An `IOTransitionSystem` between `α` and `Bool`
-abbrev AcceptingTransitionSystem (τ : Type*) (α : Type) := IOTransitionSystem τ α Bool
+set_option linter.checkUnivs false in
+/-- An `IOTransitionSystem` between `α` and `Bool`.
+`True` and `False` denote acceptance and rejection. -/
+abbrev AcceptingCM (τ : Type*) (α : Type) := IOComputationModel τ α Bool
 
-open IOTransitionSystem
+set_option linter.checkUnivs false in
+/-- An `IOTransitionSystem` between `List Γ` and `Bool`.
+`True` and `False` denote acceptance and rejection. -/
+abbrev ListAcceptingCM (τ : Type*) (Γ : Type) := IOComputationModel τ (List Γ) Bool
+
+open ComputationModel
 
 namespace TransitionSystem
 
-variable {τ : Type u} [TransitionSystem τ]
+variable {τ : Type u} [ComputationModel τ]
 
---def EvalsTo (t : τ) (a b : cfg t) := Relation.ReflTransGen red a b
+/-- Reachability in the computer's labelled transition system. -/
 def EvalsTo (t : τ) (a b : cfg t) := LTS.CanReach (lts t) a b
 
 /--
 The machine `t` reaches `b` from `a` in at most `n` steps.
 -/
-def EvalsToInTime (t : τ) (a b : cfg t) (n : ℕ) := Relation.RelatesWithinSteps red a b n
+def EvalsToInTime (t : τ) (a b : cfg t) (n : ℕ) :=
+  ∃ μs, μs.length ≤ n ∧ (lts t).MTr a μs b
 
 variable {t : τ} {a b c : cfg t} {n n₁ n₂ : ℕ}
 
--- TODO: Potentially get rid of these definitions and work with `RelatesWithinSteps` directly
--- in proof contexts?
+lemma EvalsTo.refl : EvalsTo t a a := LTS.CanReach.refl (lts t) a
 
-lemma EvalsTo.refl : EvalsTo t a a := Relation.ReflTransGen.refl
+lemma EvalsTo.trans (h₁ : EvalsTo t a b) (h₂ : EvalsTo t b c) : EvalsTo t a c
+  := LTS.CanReach.trans _ h₁ h₂
 
-lemma EvalsTo.trans (h₁ : EvalsTo t a b) (h₂ : EvalsTo t b c) : EvalsTo t a c :=
-  Relation.ReflTransGen.trans h₁ h₂
-
-lemma EvalsToInTime.refl : EvalsToInTime t a a 0 := Relation.RelatesWithinSteps.refl a
+lemma EvalsToInTime.refl : EvalsToInTime t a a 0 := LTS.CanReachIn.refl _ _
 
 lemma EvalsToInTime.trans (h₁ : EvalsToInTime t a b n₁) (h₂ : EvalsToInTime t b c n₂) :
-    EvalsToInTime t a c (n₁ + n₂) := Relation.RelatesWithinSteps.trans h₁ h₂
+    EvalsToInTime t a c (n₁ + n₂) := LTS.CanReachIn.trans _ h₁ h₂
 
-theorem EvalsToInTime.of_le (h : EvalsToInTime t a b n₁) (hn : n₁ ≤ n₂) :
-    EvalsToInTime t a b n₂ :=
-  Relation.RelatesWithinSteps.mono hn h
+lemma EvalsToInTime.mono : Monotone (EvalsToInTime t a b ·) := LTS.CanReachIn.mono _
 
+/-- A bounded execution also witnesses unbounded reachability. -/
+theorem EvalsToInTime.evalsTo (h : EvalsToInTime t a b n) : EvalsTo t a b := by
+  obtain ⟨μs, _, hmtr⟩ := h
+  exact ⟨μs, hmtr⟩
+
+/- Recover the counted-relation API by forgetting transition labels. -/
+--theorem evalsToInTime_iff_relatesWithinSteps :
+    --EvalsToInTime t a b n ↔ Relation.RelatesWithinSteps (lts t).UnlabelledTr a b n :=
+  --(lts t).relatesWithinSteps_unlabelledTr_iff.symm
 
 end TransitionSystem
 
-namespace IOTransitionSystem
-open TransitionSystem
+namespace IOComputationModel
+open ComputationModel
 
-variable {τ : Type*} {α β : Type} [IOTransitionSystem τ α β]
+variable {τ : Type*} {α β : Type} [IOComputationModel τ α β]
 
 /--
 A valid execution sequence that halts.
 -/
 structure HaltingRun (t : τ) (l : α) where
-  haltState : cfg t
-  haltState_halts : ¬ ∃ s, red haltState s
-  evalsTo : TransitionSystem.EvalsTo t (init l) haltState
+  μs : List (label t)
+  ss : List (cfg t)
+  haltState : (cfg t)
+  haltState_halts : (lts t).IsTerminal haltState
+  isExecution : LTS.Execution (lts t) (init l) μs haltState ss
 
 /--
 A valid execution sequence that halts within time bound `n`.
 -/
-structure HaltingRunInTime (t : τ) (l : α) (n : ℕ) where
-  haltState : (cfg t)
-  haltState_halts : ¬ ∃ s, red haltState s
-  evals_to : TransitionSystem.EvalsToInTime t (init l) haltState n
+structure HaltingRunInTime (t : τ) (l : α) (n : ℕ) extends HaltingRun t l where
+  lengthBound : μs.length ≤ n
 
 structure HaltingRunInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ)
     extends HaltingRunInTime t l n where
-  -- TODO: Put proper space bound in here
-  size_bound : SpaceSize.space_used haltState ≤ s
+  size_bound : ∀ state ∈ ss, SpaceSize.space_used state ≤ s
 
 def Halts (t : τ) (l : α) :=
   Nonempty (HaltingRun t l)
@@ -166,9 +164,12 @@ Time bounds of `HaltingRunInTime` can be increased.
 -/
 def HaltingRunInTime.mono {t : τ} {n m : ℕ} {l : α} (hnm : n ≤ m)
     (hv : HaltingRunInTime t l n) : HaltingRunInTime t l m where
+  μs := hv.μs
+  ss := hv.ss
   haltState := hv.haltState
   haltState_halts := hv.haltState_halts
-  evals_to := TransitionSystem.EvalsToInTime.of_le hv.evals_to hnm
+  isExecution := hv.isExecution
+  lengthBound := Nat.le_trans hv.lengthBound hnm
 
 def HaltsInTime (t : τ) (l : α) (n : ℕ) :=
   Nonempty (HaltingRunInTime t l n)
@@ -203,27 +204,23 @@ A witness machine is bundled as part of this structure,
 as well as a function bounding execution time.
 -/
 structure TimeComputable {Γ Γ' : Type} [EncodingSize Γ]
-    (τ : Type*) [IOTransitionSystem τ Γ Γ'] (f : Γ → Γ') where
+    (τ : Type*) [IOComputationModel τ Γ Γ'] (f : Γ → Γ') where
   t : τ
   timeBound : ℕ → ℕ
-  outputsFunInTmie : ∀ w, IOTransitionSystem.OutputsInTime t w (f w) (timeBound (encodingSize w))
+  outputsFunInTmie : ∀ w, OutputsInTime t w (f w) (timeBound (encodingSize w))
 
 structure PolyTimeComputable {Γ Γ' : Type} [EncodingSize Γ]
-    (τ : Type*) [IOTransitionSystem τ Γ Γ'] (f : Γ → Γ') extends TimeComputable τ f where
+    (τ : Type*) [IOComputationModel τ Γ Γ'] (f : Γ → Γ') extends TimeComputable τ f where
   poly : Polynomial ℕ
   bounds (n : ℕ) : timeBound n ≤ poly.eval n
 
-end IOTransitionSystem
+end IOComputationModel
 
 
-namespace AcceptingTransitionSystem
---open Cslib.Automata
-/- Every `AcceptingTransitionSystem` is canonically an Acceptor. -/
---instance : Acceptor τ Γᵢ where
---  Accepts t l := ∃ (run : HaltingRun t l), output run.haltState = Option.some true
+namespace AcceptingCM
+open IOComputationModel
 
-variable {τ : Type*} {α : Type} [AcceptingTransitionSystem τ α]
-
+variable {τ : Type*} {α : Type} [AcceptingCM τ α]
 
 abbrev AcceptsInTime (t : τ) (l : α) (n : ℕ) :=
   OutputsInTime t l (Option.some true) n
@@ -246,7 +243,7 @@ theorem RejectsInTime.mono {t : τ} {l : α} : Monotone (AcceptsInTime t l · ) 
 theorem DecidesInTime.mono {t : τ} {l : α} : Monotone (AcceptsInTime t l · ) :=
   OutputsInTime.mono
 
-end AcceptingTransitionSystem
+end AcceptingCM
 
 
 end Computation

@@ -37,14 +37,13 @@ def ResourceUsage.noSpaceValuation (R : ResourceUsage) : Fin 3 → ℕ
   | 1 => R.inputEncodingSize
   | 2 => R.outputEncodingSize
 
-namespace IOTransitionSystem
-open Cslib.Automata
-open IOTransitionSystem
+namespace IOComputationModel
+open IOComputationModel
 
 /--
 Machine `τ'` emulates (i.e. replicates computations) machine `τ` with overhead `time`. -/
-def EmulatesInTime (Γ Γ' : Type) {α β : Type*} [IOTransitionSystem α Γ Γ']
-  [IOTransitionSystem β Γ Γ'] (τ : α) (τ' : β) (time : ℕ → ℕ) :=
+def EmulatesInTime (Γ Γ' : Type) {α β : Type*} [IOComputationModel α Γ Γ']
+  [IOComputationModel β Γ Γ'] (τ : α) (τ' : β) (time : ℕ → ℕ) :=
   ∀ (l : Γ), ∀ (l' : Option Γ') n,
     OutputsInTime τ l l' n → OutputsInTime τ' l l' (time n)
 
@@ -66,7 +65,7 @@ Machine `τ'` emulates (i.e. replicates computation) machine `τ` with the speci
 and are meant to specify the new time and space bounds.
 -/
 def EmulatesInTimeAndSpace (Γ Γ' : Type) [EncodingSize Γ] [EncodingSize Γ'] {α β : Type*}
-    [IOTransitionSystem α Γ Γ'] [SpaceSize α] [IOTransitionSystem β Γ Γ'] [SpaceSize β]
+    [IOComputationModel α Γ Γ'] [SpaceSize α] [IOComputationModel β Γ Γ'] [SpaceSize β]
     (τ : α) (τ' : β) (timeBound : ResourceUsage → ℕ) (spaceBound : ResourceUsage → ℕ):=
   ∀ (l : Γ), ∀ (l' : Option Γ') n s,
     OutputsInTimeAndSpace τ l l' n s
@@ -74,34 +73,34 @@ def EmulatesInTimeAndSpace (Γ Γ' : Type) [EncodingSize Γ] [EncodingSize Γ'] 
       (timeBound (ResourceUsage.mk₁ l l' n s)) (spaceBound (ResourceUsage.mk₁ l l' n s))
 
 /--
-An IOTransitionSystem on `α` is reducible to `β` (in a specified time class),
+An IOComputationModel on `α` is reducible to `β` (in a specified time class),
 if all transducers in `α` have an emulator in `β` with time overhead given by a function
 of the specified time class.
 -/
-def ReducibleInTime {Γ Γ' : Type} (α β : Type*) [IOTransitionSystem α Γ Γ']
-    [IOTransitionSystem β Γ Γ'] (time_class : Set (ℕ → ℕ)) :=
+def ReducibleInTime {Γ Γ' : Type} (α β : Type*) [IOComputationModel α Γ Γ']
+    [IOComputationModel β Γ Γ'] (time_class : Set (ℕ → ℕ)) :=
   ∀ (τ : α), ∃ (τ' : β) (time: time_class), EmulatesInTime Γ Γ' τ τ' time
 
-def EquivalentInTime {Γ Γ' : Type} (α β : Type*) [IOTransitionSystem α Γ Γ']
-    [IOTransitionSystem β Γ Γ'] (time_class : Set (ℕ → ℕ)) :=
+def EquivalentInTime {Γ Γ' : Type} (α β : Type*) [IOComputationModel α Γ Γ']
+    [IOComputationModel β Γ Γ'] (time_class : Set (ℕ → ℕ)) :=
   ReducibleInTime α β time_class ∧ ReducibleInTime β α time_class
 
 def ReducibleInTimeAndSpace {Γ Γ' : Type} [EncodingSize Γ] [EncodingSize Γ'] (α β : Type u)
-    [IOTransitionSystem α Γ Γ'] [SpaceSize α] [IOTransitionSystem β Γ Γ']
+    [IOComputationModel α Γ Γ'] [SpaceSize α] [IOComputationModel β Γ Γ']
     [SpaceSize β] (timeBounds : Set (ResourceUsage → ℕ))
     (spaceBounds : Set (ResourceUsage → ℕ)) :=
   ∀ (τ : α), ∃ (τ' : β) (timeBound : timeBounds) (spaceBound : spaceBounds),
     EmulatesInTimeAndSpace Γ Γ' τ τ' timeBound spaceBound
 
 def EquivalentInTimeAndSpace {Γ Γ' : Type} [EncodingSize Γ] [EncodingSize Γ'] (α β : Type u)
-    [IOTransitionSystem α Γ Γ'] [SpaceSize α] [IOTransitionSystem β Γ Γ']
+    [IOComputationModel α Γ Γ'] [SpaceSize α] [IOComputationModel β Γ Γ']
     [SpaceSize β] (timeBounds : Set (ResourceUsage → ℕ))
     (spaceBounds : Set (ResourceUsage → ℕ)) :=
   ReducibleInTimeAndSpace α β timeBounds spaceBounds ∧
     ReducibleInTimeAndSpace β α timeBounds spaceBounds
 
 
-end IOTransitionSystem
+end IOComputationModel
 
 
 -- TODO: Make it easier to work with these classes
@@ -117,10 +116,11 @@ def ResourceNoSpacePolynomials : Set (ResourceUsage → ℕ) :=
 def ResourceSpacePolynomials : Set (ResourceUsage → ℕ) :=
   {f | ∃ (P : Polynomial ℕ), f = P.eval ∘ ResourceUsage.space}
 
-open AcceptingTransitionSystem
+open AcceptingCM
+open IOComputationModel
 
 /-- "Proof" that the specified tm decides the language `l` in polynomial time. -/
-structure DecidesInPolyTime {Γ : Type} {τ : Type*} [AcceptingTransitionSystem τ Γ] (t : τ)
+structure DecidesInPolyTime {Γ : Type} {τ : Type*} [ListAcceptingCM τ Γ] (t : τ)
   (l : Language Γ) where
   /-- A time function bounding execution time dependent on input size. -/
   time : Polynomial ℕ
@@ -128,9 +128,8 @@ structure DecidesInPolyTime {Γ : Type} {τ : Type*} [AcceptingTransitionSystem 
   rejects (w : List Γ) : w ∉ l → RejectsInTime t w (time.eval (R := ℕ) w.length)
 
 
-
 --instance PairEncoding {Γ : Type} {τ : Type*} {β : Type}
---    [IOTransitionSystem τ (List (WithSeparator Γ)) β] : IOTransitionSystem τ (List Γ × List Γ) β
+--    [IOComputationModel τ (List (WithSeparator Γ)) β] : IOComputationModel τ (List Γ × List Γ) β
 --  where
 --init w := init w.first w.second
 --output w := sorry
@@ -152,7 +151,7 @@ structure Verifier {Γ : Type} (l : Language Γ) where
   elem_iff_exists_cert (w : List Γ) :
     w ∈ l ↔ ∃ (c : List Γ), c.length ≤ certSizeBound.eval w.length ∧ accept w c
 
-structure VerifiesInPolyTime {Γ : Type} {τ : Type*} [AcceptingTransitionSystem τ (Option Γ)]
+structure VerifiesInPolyTime {Γ : Type} {τ : Type*} [ListAcceptingCM τ (Option Γ)]
     (t : τ) (l : Language Γ) where
   verifier : Verifier l
   time : Polynomial ℕ
@@ -163,40 +162,42 @@ structure VerifiesInPolyTime {Γ : Type} {τ : Type*} [AcceptingTransitionSystem
     ¬ verifier.accept w c → RejectsInTime t (List.combine w c) (time.eval (R := ℕ) w.length)
 
 -- More abstract version, since we don't talk about encoding
-structure VerifiesInPolyTime₂ {Γ : Type} {τ : Type*} [IOTransitionSystem τ (List Γ × List Γ) Bool]
+structure VerifiesInPolyTime₂ {Γ : Type} {τ : Type*} [AcceptingCM τ (List Γ × List Γ)]
     (t : τ) (l : Language Γ)
     where
   verifier : Verifier l
-  --computes : IOTransitionSystem.ComputesInPolyTime t (Function.uncurry verifier.accept)
+  --computes : IOComputationModel.ComputesInPolyTime t (Function.uncurry verifier.accept)
   time : Polynomial ℕ
   computesAccept (w c : List Γ) : c.length ≤ verifier.certSizeBound.eval w.length
     → verifier.accept w c
-    → IOTransitionSystem.OutputsInTime t (w, c) (some true) (time.eval (R := ℕ) w.length)
+    → OutputsInTime t (w, c) (some true) (time.eval (R := ℕ) w.length)
   computesReject (w c : List Γ) : c.length ≤ verifier.certSizeBound.eval w.length
     → ¬ verifier.accept w c
-    → IOTransitionSystem.OutputsInTime t (w, c) (some true) (time.eval (R := ℕ) w.length)
+    → OutputsInTime t (w, c) (some true) (time.eval (R := ℕ) w.length)
 
 structure WithTwoInputs (τ : Type*) where
   t : τ
 
-instance {Γ Γ' : Type} {τ : Type*} [IOTransitionSystem τ (List (Option Γ)) Γ'] :
-    IOTransitionSystem (WithTwoInputs τ) (List Γ × List Γ) Γ'  where
-  cfg a := TransitionSystem.cfg a.t
-  red := TransitionSystem.red
-  init w := InputTransitionSystem.init (List.combine w.fst w.snd)
-  output := IOTransitionSystem.output
+instance {Γ Γ' : Type} {τ : Type*} [IOComputationModel τ (List (Option Γ)) Γ'] :
+    IOComputationModel (WithTwoInputs τ) (List Γ × List Γ) Γ'  where
+  label w := ComputationModel.label w.t
+  lts w := ComputationModel.lts w.t
+  cfg a := ComputationModel.cfg a.t
+  init input := IOComputationModel.init (List.combine input.fst input.snd)
+  output := IOComputationModel.output
 
 -- Bridging the two definitions
-abbrev VerifiesInPolyTime₃ {Γ : Type} {τ : Type*} [AcceptingTransitionSystem τ (Option Γ)]
+abbrev VerifiesInPolyTime₃ {Γ : Type} {τ : Type*} [AcceptingCM τ (List (Option Γ))]
     (t : τ) (l : Language Γ) :=
     VerifiesInPolyTime₂ (⟨t⟩ : WithTwoInputs τ) l
 
 
-def DecidableInPolyTime {Γ : Type} (l : Language Γ) (τ : Type*) [AcceptingTransitionSystem τ Γ]
+def DecidableInPolyTime {Γ : Type} (l : Language Γ) (τ : Type*)
+    [ListAcceptingCM τ Γ]
   := ∃ (t : τ), Nonempty (DecidesInPolyTime t l)
 
 def VerifiableInPolyTime {Γ : Type} (l : Language Γ) (τ : Type*)
-    [AcceptingTransitionSystem τ (Option Γ)]
+    [ListAcceptingCM τ (Option Γ)]
   := ∃ (t : τ), Nonempty (VerifiesInPolyTime t l)
 
 
@@ -212,25 +213,25 @@ def VerifiableInPolyTime {Γ : Type} (l : Language Γ) (τ : Type*)
 
 
 -- P, not bundled, not using ComputationModel
-def PolyTimeDecidableLanguages (Γ : Type) (τ : Type*) [AcceptingTransitionSystem τ Γ] :
+def PolyTimeDecidableLanguages (Γ : Type) (τ : Type*) [ListAcceptingCM τ Γ] :
     Set (Language Γ) :=
   { l | DecidableInPolyTime l τ }
 
-def PolyTimeVerifiableLanguages (Γ : Type) (τ : Type*) [AcceptingTransitionSystem τ (Option Γ)] :
+def PolyTimeVerifiableLanguages (Γ : Type) (τ : Type*) [ListAcceptingCM τ (Option Γ)] :
     Set (Language Γ) :=
   { l | VerifiableInPolyTime l τ}
 
 
-structure PolyTimeTransformable {Γ Γ' : Type} (τ : Type*) [ListTransitionSystem τ Γ Γ']
+structure PolyTimeTransformable {Γ Γ' : Type} (τ : Type*) [ListCM τ Γ Γ']
     (L₁ : Language Γ) (L₂ : Language Γ') where
   f : List Γ → List Γ'
   f_correct : ∀ w, w ∈ L₁ ↔ f w ∈ L₂
-  computable : IOTransitionSystem.PolyTimeComputable τ f
+  computable : IOComputationModel.PolyTimeComputable τ f
 
 
 structure IsNPComplete {Γ : Type} (l : Language Γ) (τO : Type*)
-    [AcceptingTransitionSystem τO (Option Γ)]
-    (τT : Type*) [ListTransitionSystem τT Γ Γ] where
+    [ListAcceptingCM τO (Option Γ)]
+    (τT : Type*) [ListCM τT Γ Γ] where
   elemNP : l ∈ PolyTimeVerifiableLanguages Γ τO
   transforms (l' : Language Γ): l' ∈ PolyTimeVerifiableLanguages Γ τO
     → Nonempty (PolyTimeTransformable τT l' l)
@@ -239,8 +240,8 @@ structure IsNPComplete {Γ : Type} (l : Language Γ) (τO : Type*)
 -- TODO: Can we even prove this in this generality?
 -- Probably no, we have no idea how these two acceptance systems interact with
 -- each other!
-theorem P_sub_NP (Γ : Type) (τ τO : Type*) [AcceptingTransitionSystem τ Γ]
-    [AcceptingTransitionSystem τO (Option Γ)] :
+theorem P_sub_NP (Γ : Type) (τ τO : Type*) [ListAcceptingCM τ Γ]
+    [ListAcceptingCM τO (Option Γ)] :
   PolyTimeDecidableLanguages Γ τ ⊆ PolyTimeVerifiableLanguages Γ τO := sorry
 
 
@@ -251,12 +252,12 @@ structure PolyTimeComputable (f : List Γᵢ → List Γₒ) extends TimeComputa
   poly : Polynomial ℕ
   bounds : ∀ n, time_bound n ≤ poly.eval n
 -/
-structure TransformsInPolyTime {Γ Γ' : Type} {τ : Type*} [ListTransitionSystem τ Γ Γ']
+structure TransformsInPolyTime {Γ Γ' : Type} {τ : Type*} [ListCM τ Γ Γ']
     (t : τ) (L₁ : Language Γ) (L₂ : Language Γ') where
   time : Polynomial ℕ
   f : List Γ → List Γ'
   f_correct : ∀ w, w ∈ L₁ ↔ f w ∈ L₂
-  t_computes : ∀ w, IOTransitionSystem.OutputsInTime t w (f w) (time.eval w.length)
+  t_computes : ∀ w, IOComputationModel.OutputsInTime t w (f w) (time.eval w.length)
 
 
 
@@ -264,13 +265,13 @@ structure TransformsInPolyTime {Γ Γ' : Type} {τ : Type*} [ListTransitionSyste
 
 
 -- Sat is NP-complete
--- 1. Sat ∈ NP (Γ)                                             -> AcceptingTransitionSystem
+-- 1. Sat ∈ NP (Γ)                                             -> AcceptingComputationModel
 -- 2. ∀ Problem ∈ NP (Γ') , ∃ PolynomialTransformation to SAT  -> ListTransitionModel Γ Γ'
---                                                             -> AcceptingTransitionSystem
+--                                                             -> AcceptingComputationModel
 
-theorem P_constant_aux {Γ : Type} (τ τ' : Type*) [AcceptingTransitionSystem τ Γ]
-    [AcceptingTransitionSystem τ' Γ]
-    (h : IOTransitionSystem.ReducibleInTime τ τ' NaturalPolynomials) :
+theorem P_constant_aux {Γ : Type} (τ τ' : Type*) [ListAcceptingCM τ Γ]
+    [ListAcceptingCM τ' Γ]
+    (h : IOComputationModel.ReducibleInTime τ τ' NaturalPolynomials) :
     PolyTimeDecidableLanguages Γ τ ⊆ PolyTimeDecidableLanguages Γ τ' := by
   intro l ⟨t, ⟨hdecide⟩⟩
   obtain ⟨t', ⟨_, time, htime⟩, hemulate⟩ := h t
@@ -285,9 +286,9 @@ theorem P_constant_aux {Γ : Type} (τ τ' : Type*) [AcceptingTransitionSystem �
 /- If two computation models are equivalent in Polynomial time,
 then the class `P` agrees for them.
 -/
-theorem P_constant {Γ : Type} (τ τ' : Type*) [AcceptingTransitionSystem τ Γ]
-    [AcceptingTransitionSystem τ' Γ]
-    (h : IOTransitionSystem.EquivalentInTime τ τ' NaturalPolynomials) :
+theorem P_constant {Γ : Type} (τ τ' : Type*) [ListAcceptingCM τ Γ]
+    [ListAcceptingCM τ' Γ]
+    (h : IOComputationModel.EquivalentInTime τ τ' NaturalPolynomials) :
     PolyTimeDecidableLanguages Γ τ = PolyTimeDecidableLanguages Γ τ' := by
   obtain ⟨_, _⟩ := h
   apply Set.eq_of_subset_of_subset
