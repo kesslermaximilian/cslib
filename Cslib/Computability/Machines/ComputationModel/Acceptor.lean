@@ -11,7 +11,9 @@ public import Cslib.Computability.Machines.ComputationModel.Basic
 
 /-!
 
-# test
+# Computation Models as Acceptors
+
+Typeclass synthesis to allow viewing an `AcceptingCM`
 
 -/
 

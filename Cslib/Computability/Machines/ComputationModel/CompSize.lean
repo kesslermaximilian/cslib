@@ -15,7 +15,7 @@ public import Cslib.Computability.Automata.Acceptors.Acceptor
 
 /-!
 
-# Encoding size of objects
+#  size of objects
 
 -/
 
@@ -24,22 +24,22 @@ public import Cslib.Computability.Automata.Acceptors.Acceptor
 namespace Computation
 
 /- Means that there is a reasonable notion of "size" on input / output. -/
-class EncodingSize (Γ : Type) where
-  encodingSize : Γ → ℕ
+class CompSize (Γ : Type) where
+  compSize : Γ → ℕ
 
-instance (Γ : Type) [EncodingSize Γ] : EncodingSize (Option Γ) where
-  encodingSize x := if h : x.isSome then 1 + EncodingSize.encodingSize (x.get h) else 1
+instance (Γ : Type) [CompSize Γ] : CompSize (Option Γ) where
+  compSize x := if h : x.isSome then 1 + CompSize.compSize (x.get h) else 1
 
-instance (Γ : Type) : EncodingSize (List Γ) where
-  encodingSize l := l.length
+instance (Γ : Type) : CompSize (List Γ) where
+  compSize l := l.length
 
-instance (Γ : Type) : EncodingSize (List Γ × List Γ) where
-  encodingSize p := p.fst.length + p.snd.length + 1
+instance (Γ : Type) : CompSize (List Γ × List Γ) where
+  compSize p := p.fst.length + p.snd.length + 1
 
-instance : EncodingSize Unit where
-  encodingSize _ := 0
+instance : CompSize Unit where
+  compSize _ := 0
 
-instance : EncodingSize Bool where
-  encodingSize _ := 1
+instance : CompSize Bool where
+  compSize _ := 1
 
 end Computation

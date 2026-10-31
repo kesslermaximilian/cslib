@@ -11,31 +11,35 @@ public import Cslib.Foundations.Relation.RelatesInSteps
 public import Cslib.Foundations.Semantics.LTS.Relation
 public import Cslib.Foundations.Semantics.LTS.Execution
 public import Cslib.Foundations.Relation.Termination
-public import Cslib.Computability.Automata.Acceptors.Acceptor
-public import Cslib.Computability.Machines.ComputationModel.EncodingSize
+public import Cslib.Computability.Machines.ComputationModel.CompSize
 
 
 /-! # Computation models based on labelled transition systems
 
-Each computer `t` has a configuration type `cfg t`, a label type `label t`, and
-an `LTS (cfg t) (label t)`. `IOComputationModel` adds an initial configuration
-for each input and a partial output function.
+This file develops typeclasses and general derived notions for transition-based
+computation models. Common examples for this include Turing machines
+(both single/multitape and deterministic/nondeterministic) and WCBV (weak call-by-value λ-calculus).
 
-Execution uses the existing LTS API: `EvalsTo` is `LTS.CanReach`, and
-`EvalsToInTime` witnesses an `LTS.MTr` whose list of labels has length at most
-the time bound. Every transition counts as one step, regardless of its label.
-`HaltsFrom` uses strong normalization of the underlying unlabelled relation:
-every computation from the given configuration must be finite. `HaltsFromInTime`
-bounds every execution prefix, so it also excludes infinite computations.
-Neither definition assumes determinism or fairness.
+Computation (between two types) is modelled as a lifting the input into a
+computational context (configuration space), then using a (labelled) transition system to "execute"
+computation, and among reaching a terminal configuration, projecting onto the output type.
 
-`HaltingRun` bundles a finite execution ending at an `LTS.IsTerminal` configuration.
-`MayOutput` asserts the existence of such a run with a given output. In contrast,
-`Outputs` requires every computation to terminate and every terminal run to agree
-on the output. `OutputUnique` expresses agreement alone and permits divergence.
-Agreement on `none` means no output is available; computing a value uses `some`.
-Nondeterministic acceptance uses an existential accepting run together with a
-universal execution bound; rejecting branches are allowed.
+A `IOComputationModel τ α β` will be a type `τ` whose elements `(t : τ)` all behave like
+(potentially different) computers between the input type `α` and output type `β`.
+In many contexts, `α` and `β` will be `List Γ` for some `(Γ : Type)`, but definitions are stated
+in generality here.
+
+Using an `LTS` for the configuration naturally gives rise to both deterministic and
+non-deterministic computation models (with deterministic being a property of this `LTS`).
+Thus, we state definitions with the nondeterministic case in mind; the deterministic case
+can sometimes be simplified.
+
+Transition-based computation models give a natural way of measuring runtime by counting the number
+of transitions in the `LTS`.
+Additionally, if the configuration state `cfg t` of a computer has a notion of size,
+we can also naturally define the space consumption of a computation as the maximum size of any
+intermediate state. This is achieved using the `[SpaceSize τ]` class.
+
 
 ## Main declarations
 
@@ -43,17 +47,17 @@ universal execution bound; rejecting branches are allowed.
 - `IOComputationModel`: a computation model with input initialization and partial output.
 - `ComputationModel.HaltsFrom`, `ComputationModel.HaltsFromInTime`: universal termination
   from a configuration, optionally with a uniform bound on execution length.
-- `TransitionSystem.EvalsTo`, `TransitionSystem.EvalsToInTime`: reachability and
-  time-bounded reachability in the associated LTS.
 - `IOComputationModel.HaltingRun`, `IOComputationModel.HaltingRunInTime`: reachable
   terminal configurations, optionally with a bound on the number of transitions.
 - `IOComputationModel.OutputsInTime`: a universal time bound and agreement on output.
 - `IOComputationModel.TimeComputable`, `IOComputationModel.PolyTimeComputable`:
   computers bundled with bounds on the time needed to compute a function.
-
-Time-and-space bounds apply to every state in every execution prefix, including
-the initial configuration. Each existential `HaltingRunInTimeAndSpace` separately
-records the space used along its particular run.
+- `ListCM τ Γᵢ Γₒ`: Abbreviation for `IOComputationModel τ (List Γᵢ Γₒ)`, i.e. a computation model
+on lists
+- `AcceptingCM τ α`: Abbreviation for `IOComputationModel τ α Bool`, i.e. a computation model that
+only outputs accept/reject.
+- `ListAcceptingCM τ Γ`: Abbreviation for `IOComputationModel τ (List Γ) Bool`, i.e. a computation
+model that acts as an acceptor/rejector of strings.
 -/
 
 @[expose] public section
@@ -62,7 +66,7 @@ namespace Computation
 
 open Cslib
 
-open EncodingSize
+open CompSize
 
 /-- A configuration type, label type, and labelled transition system for each computer. -/
 class ComputationModel (τ : Type u) where
@@ -73,7 +77,9 @@ class ComputationModel (τ : Type u) where
   /-- Resulting LTS of a computer -/
   lts (t : τ) : LTS (cfg t) (label t)
 
-/-- Configurations of this `ComputationModel` have a notion of space occupied, measured in `ℕ`. -/
+/--
+Configurations of (computers of) this `ComputationModel` have a notion of occupied space,
+measured in `ℕ`. -/
 class SpaceSize (τ : Type u) [ComputationModel τ] where
   space_used {t : τ} : ComputationModel.cfg t → ℕ
 
@@ -348,10 +354,10 @@ theorem OutputsInTime.mono {t : τ} {l : α} {l' : Option β} : Monotone (Output
   intro _ _ hnm h
   exact ⟨HaltsInTime.mono hnm h.1, h.2⟩
 
-def ComputesInTime [EncodingSize α] (t : τ) (f : α → β) (time : ℕ → ℕ) :=
-  ∀ (l : α), OutputsInTime t l (some (f l)) (time (EncodingSize.encodingSize l))
+def ComputesInTime [CompSize α] (t : τ) (f : α → β) (time : ℕ → ℕ) :=
+  ∀ (l : α), OutputsInTime t l (some (f l)) (time (compSize l))
 
-def ComputesInPolyTime [EncodingSize α] (t : τ) (f : α → β) :=
+def ComputesInPolyTime [CompSize α] (t : τ) (f : α → β) :=
   ∃ (P : Polynomial ℕ), ComputesInTime t f P.eval
 
 /--
@@ -359,13 +365,13 @@ def ComputesInPolyTime [EncodingSize α] (t : τ) (f : α → β) :=
 A witness machine is bundled as part of this structure,
 as well as a function bounding execution time.
 -/
-structure TimeComputable {Γ Γ' : Type} [EncodingSize Γ]
+structure TimeComputable {Γ Γ' : Type} [CompSize Γ]
     (τ : Type*) [IOComputationModel τ Γ Γ'] (f : Γ → Γ') where
   t : τ
   timeBound : ℕ → ℕ
-  outputsFunInTmie : ∀ w, OutputsInTime t w (f w) (timeBound (encodingSize w))
+  outputsFunInTmie : ∀ w, OutputsInTime t w (f w) (timeBound (compSize w))
 
-structure PolyTimeComputable {Γ Γ' : Type} [EncodingSize Γ]
+structure PolyTimeComputable {Γ Γ' : Type} [CompSize Γ]
     (τ : Type*) [IOComputationModel τ Γ Γ'] (f : Γ → Γ') extends TimeComputable τ f where
   poly : Polynomial ℕ
   bounds (n : ℕ) : timeBound n ≤ poly.eval n

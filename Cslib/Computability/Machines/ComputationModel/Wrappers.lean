@@ -68,6 +68,19 @@ instance WithTwoInputs.instIOComputationModel {Γ Γ' : Type} {τ : Type*}
   init input := IOComputationModel.init (List.combine input.fst input.snd)
   output := IOComputationModel.output
 
+
+structure WithIOEncoding {α' α β β' : Type} (enc_in : α' → α) (enc_out : β → β') (τ : Type*) where
+  t : τ
+
+instance WithIOEncoding.instIOComputationModel {α' α β β' : Type}
+    {fin : α' → α} {fout : β → β'} {τ : Type*} [IOComputationModel τ α β] :
+    IOComputationModel (WithIOEncoding fin fout τ) α' β' where
+  label w := ComputationModel.label w.t
+  lts w := ComputationModel.lts w.t
+  cfg a := ComputationModel.cfg a.t
+  init := IOComputationModel.init ∘ fin
+  output := (Option.map fout) ∘ IOComputationModel.output
+
 /--
 View the computation model `τ` as an acceptor by leveraging the distinguished accept and
 reject elements on its output type.

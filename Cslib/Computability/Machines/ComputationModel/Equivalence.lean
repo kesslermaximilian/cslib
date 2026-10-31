@@ -24,19 +24,20 @@ public import Cslib.Foundations.Data.List.Combine
 
 
 namespace Computation
+open CompSize
 
 
 structure ResourceUsage where
   time : ℕ
   space : ℕ
-  inputEncodingSize : ℕ
-  outputEncodingSize : ℕ
+  inputSize : ℕ
+  outputSize : ℕ
 
 /-- Evaluation everywhere except space used. -/
 def ResourceUsage.noSpaceValuation (R : ResourceUsage) : Fin 3 → ℕ
   | 0 => R.time
-  | 1 => R.inputEncodingSize
-  | 2 => R.outputEncodingSize
+  | 1 => R.inputSize
+  | 2 => R.outputSize
 
 namespace IOComputationModel
 open IOComputationModel
@@ -49,12 +50,12 @@ def EmulatesInTime (Γ Γ' : Type) {α β : Type*} [IOComputationModel α Γ Γ'
     OutputsInTime τ l l' n → OutputsInTime τ' l l' (time n)
 
 
-def ResourceUsage.mk₁ {Γ Γ' : Type} [EncodingSize Γ] [EncodingSize Γ']
+def ResourceUsage.mk₁ {Γ Γ' : Type} [CompSize Γ] [CompSize Γ']
     (l : Γ) (l' : Option Γ') (n : ℕ) (s : ℕ) : ResourceUsage where
   time := n
   space := s
-  inputEncodingSize := EncodingSize.encodingSize l
-  outputEncodingSize := EncodingSize.encodingSize l'
+  inputSize := compSize l
+  outputSize := compSize l'
 
 
 -- TODO: Generalize this for other resources apart from time/space ?
@@ -65,7 +66,7 @@ Machine `τ'` emulates (i.e. replicates computation) machine `τ` with the speci
 `(previous time, previous space, previous input encoding size, previous output encoding size)`
 and are meant to specify the new time and space bounds.
 -/
-def EmulatesInTimeAndSpace (Γ Γ' : Type) [EncodingSize Γ] [EncodingSize Γ'] {α β : Type*}
+def EmulatesInTimeAndSpace (Γ Γ' : Type) [CompSize Γ] [CompSize Γ'] {α β : Type*}
     [IOComputationModel α Γ Γ'] [SpaceSize α] [IOComputationModel β Γ Γ'] [SpaceSize β]
     (τ : α) (τ' : β) (timeBound : ResourceUsage → ℕ) (spaceBound : ResourceUsage → ℕ):=
   ∀ (l : Γ), ∀ (l' : Option Γ') n s,
@@ -86,14 +87,14 @@ def EquivalentInTime {Γ Γ' : Type} (α β : Type*) [IOComputationModel α Γ �
     [IOComputationModel β Γ Γ'] (time_class : Set (ℕ → ℕ)) :=
   ReducibleInTime α β time_class ∧ ReducibleInTime β α time_class
 
-def ReducibleInTimeAndSpace {Γ Γ' : Type} [EncodingSize Γ] [EncodingSize Γ'] (α β : Type u)
+def ReducibleInTimeAndSpace {Γ Γ' : Type} [CompSize Γ] [CompSize Γ'] (α β : Type u)
     [IOComputationModel α Γ Γ'] [SpaceSize α] [IOComputationModel β Γ Γ']
     [SpaceSize β] (timeBounds : Set (ResourceUsage → ℕ))
     (spaceBounds : Set (ResourceUsage → ℕ)) :=
   ∀ (τ : α), ∃ (τ' : β) (timeBound : timeBounds) (spaceBound : spaceBounds),
     EmulatesInTimeAndSpace Γ Γ' τ τ' timeBound spaceBound
 
-def EquivalentInTimeAndSpace {Γ Γ' : Type} [EncodingSize Γ] [EncodingSize Γ'] (α β : Type u)
+def EquivalentInTimeAndSpace {Γ Γ' : Type} [CompSize Γ] [CompSize Γ'] (α β : Type u)
     [IOComputationModel α Γ Γ'] [SpaceSize α] [IOComputationModel β Γ Γ']
     [SpaceSize β] (timeBounds : Set (ResourceUsage → ℕ))
     (spaceBounds : Set (ResourceUsage → ℕ)) :=
