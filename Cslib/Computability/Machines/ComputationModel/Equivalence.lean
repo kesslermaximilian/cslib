@@ -8,6 +8,7 @@ module
 
 public import Cslib.Computability.Automata.Acceptors.Acceptor
 public import Cslib.Computability.Machines.ComputationModel.Basic
+public import Cslib.Computability.Machines.ComputationModel.Wrappers
 public import Cslib.Foundations.Relation.RelatesInSteps
 public import Mathlib.Algebra.MvPolynomial.Basic
 public import Mathlib.Algebra.MvPolynomial.Eval
@@ -176,16 +177,6 @@ structure VerifiesInPolyTime₂ {Γ : Type} {τ : Type*} [AcceptingCM τ (List �
     → ¬ verifier.accept w c
     → OutputsInTime t (w, c) (some true) (time.eval (R := ℕ) w.length)
 
-structure WithTwoInputs (τ : Type*) where
-  t : τ
-
-instance {Γ Γ' : Type} {τ : Type*} [IOComputationModel τ (List (Option Γ)) Γ'] :
-    IOComputationModel (WithTwoInputs τ) (List Γ × List Γ) Γ'  where
-  label w := ComputationModel.label w.t
-  lts w := ComputationModel.lts w.t
-  cfg a := ComputationModel.cfg a.t
-  init input := IOComputationModel.init (List.combine input.fst input.snd)
-  output := IOComputationModel.output
 
 -- Bridging the two definitions
 abbrev VerifiesInPolyTime₃ {Γ : Type} {τ : Type*} [AcceptingCM τ (List (Option Γ))]
@@ -279,7 +270,8 @@ theorem P_constant_aux {Γ : Type} (τ τ' : Type*) [ListAcceptingCM τ Γ]
   use t'
   use Polynomial.comp time hdecide.time
   <;> intro w hw
-  · specialize hemulate _ _ _ (hdecide.accepts w hw)
+  · --have := hdecide.accepts w hw
+    specialize hemulate _ _ _ (hdecide.accepts w hw)
     simpa [htime] using hemulate
   · specialize hemulate _ _ _ (hdecide.rejects w hw)
     simpa [htime] using hemulate

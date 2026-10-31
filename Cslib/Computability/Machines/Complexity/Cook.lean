@@ -10,6 +10,7 @@ public import Cslib.Computability.Machines.Turing.SingleTape.SatCook
 public import Cslib.Computability.Machines.Turing.SingleTape.TMCook
 public import Cslib.Computability.Machines.ComputationModel.Equivalence
 public import Cslib.Computability.Machines.Turing.SingleTape.SatCook
+public import Cslib.Computability.Machines.Turing.SingleTape.Wrappers
 public import Mathlib.Data.Int.Range
 public import Mathlib.Data.Fintype.Sum
 public import Mathlib.Tactic.Linarith
@@ -27,64 +28,6 @@ public import Std.Sat.CNF
 @[expose] public section
 
 namespace Computation
-
-/-- Marks distinguished `accept` and `reject` elements in a type, required to be different. -/
-class DenoteAcceptance (Γ : Type*) where
-  decidableEq : DecidableEq Γ
-  accept : Γ
-  reject : Γ
-  accept_ne_reject : accept ≠ reject
-
-instance {Γ : Type*} [h : DenoteAcceptance Γ] : DecidableEq Γ :=
-  h.decidableEq
-
-
-instance (Γ : Type*) [DenoteAcceptance Γ] : DenoteAcceptance (Option Γ) where
-  decidableEq := inferInstance
-  accept := some DenoteAcceptance.accept
-  reject := some DenoteAcceptance.reject
-  accept_ne_reject := by simp [DenoteAcceptance.accept_ne_reject]
-
-instance (Γ : Type*) [DenoteAcceptance Γ] : DenoteAcceptance (List Γ) where
-  decidableEq := inferInstance
-  accept := [DenoteAcceptance.accept]
-  reject := [DenoteAcceptance.reject]
-  accept_ne_reject := by simp [DenoteAcceptance.accept_ne_reject]
-
-def DenoteAcceptance.toBool {Γ : Type*} [DenoteAcceptance Γ] (t : Γ) : Option Bool :=
-  if t = DenoteAcceptance.accept then some true
-  else if t = DenoteAcceptance.reject then some false
-  else none
-
-
-structure AsAcceptor (τ : Type*) where
-  t : τ
-
-instance {Γ Γ' : Type} {τ : Type*} [IOTransitionSystem τ Γ Γ'] [DenoteAcceptance Γ'] :
-    IOTransitionSystem (AsAcceptor τ) Γ Bool  where
-  cfg a := TransitionSystem.cfg a.t
-  red := TransitionSystem.red
-  init := InputTransitionSystem.init
-  output w := IOTransitionSystem.output w >>= DenoteAcceptance.toBool
-
-/--
-Turn a ListTransitionSystem on a sum type into a ListTransitionSystem between the
-individual types.
--/
-structure WithSplitSum (τ : Type*) where
-  t : τ
-
-def extractSnd {A B : Type} (xs : List (A ⊕ B)) : Option (List B) :=
-  xs.mapM fun
-    | .inl _ => none
-    | .inr b => some b
-
-instance {Γ Γ' : Type} (τ : Type*) [ListTransitionSystem τ (Γ ⊕ Γ') (Γ ⊕ Γ')] :
-    ListTransitionSystem (WithSplitSum τ) Γ Γ' where
-  cfg a := TransitionSystem.cfg a.t
-  red := TransitionSystem.red
-  init := InputTransitionSystem.init ∘ (List.map Sum.inl)
-  output w := (IOTransitionSystem.output w) >>= extractSnd
 
 namespace Cook
 
