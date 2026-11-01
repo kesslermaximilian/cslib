@@ -39,17 +39,6 @@ def ResourceUsage.noSpaceValuation (R : ResourceUsage) : Fin 3 → ℕ
   | 1 => R.inputSize
   | 2 => R.outputSize
 
-namespace IOComputationModel
-open IOComputationModel
-
-/--
-Machine `τ'` emulates (i.e. replicates computations) machine `τ` with overhead `time`. -/
-def EmulatesInTime (Γ Γ' : Type) {α β : Type*} [IOComputationModel α Γ Γ']
-  [IOComputationModel β Γ Γ'] (τ : α) (τ' : β) (time : ℕ → ℕ) :=
-  ∀ (l : Γ), ∀ (l' : Option Γ') n,
-    OutputsInTime τ l l' n → OutputsInTime τ' l l' (time n)
-
-
 def ResourceUsage.mk₁ {Γ Γ' : Type} [CompSize Γ] [CompSize Γ']
     (l : Γ) (l' : Option Γ') (n : ℕ) (s : ℕ) : ResourceUsage where
   time := n
@@ -57,8 +46,25 @@ def ResourceUsage.mk₁ {Γ Γ' : Type} [CompSize Γ] [CompSize Γ']
   inputSize := compSize l
   outputSize := compSize l'
 
+namespace IOComputationModel
+open IOComputationModel
 
--- TODO: Generalize this for other resources apart from time/space ?
+/-- Machine `τ'` emulates (i.e. replicates computations) machine `τ` with overhead `time`. -/
+def EmulatesInTime (Γ Γ' : Type) {α β : Type*} [IOComputationModel α Γ Γ']
+    [IOComputationModel β Γ Γ'] (τ : α) (τ' : β) (time : ℕ → ℕ) :=
+  ∀ ⦃l l' n⦄, MayOutputInTime τ l l' n → MayOutputInTime τ' l l' (time n)
+
+/-- Machine `τ'` emulates (i.e. replicates computations) machine `τ`.. -/
+def Emulates (Γ Γ' : Type) {α β : Type*} [IOComputationModel α Γ Γ'] [IOComputationModel β Γ Γ']
+    (τ : α) (τ' : β) :=
+  ∀ ⦃l l'⦄, MayOutput τ l l' → MayOutput τ' l l'
+
+lemma EmulatesInTime.Emulates {α β : Type} {τ τ' : Type*} [IOComputationModel τ α β]
+    [IOComputationModel τ' α β] {t : τ} (t' : τ') {time : ℕ} (h : EmulatesInTime _ _ t t' time) :
+    Emulates _ _ t t' := by
+  rintro l l' hout
+  obtain ⟨_, hout'⟩ := hout.exists_MayOutputInTime
+  exact (h hout').MayOutput
 
 /--
 Machine `τ'` emulates (i.e. replicates computation) machine `τ` with the specified overheads:
@@ -70,8 +76,8 @@ def EmulatesInTimeAndSpace (Γ Γ' : Type) [CompSize Γ] [CompSize Γ'] {α β :
     [IOComputationModel α Γ Γ'] [SpaceSize α] [IOComputationModel β Γ Γ'] [SpaceSize β]
     (τ : α) (τ' : β) (timeBound : ResourceUsage → ℕ) (spaceBound : ResourceUsage → ℕ):=
   ∀ (l : Γ), ∀ (l' : Option Γ') n s,
-    OutputsInTimeAndSpace τ l l' n s
-    → OutputsInTimeAndSpace τ' l l'
+    MayOutputInTimeAndSpace τ l l' n s
+    → MayOutputInTimeAndSpace τ' l l'
       (timeBound (ResourceUsage.mk₁ l l' n s)) (spaceBound (ResourceUsage.mk₁ l l' n s))
 
 /--
@@ -271,11 +277,20 @@ theorem P_constant_aux {Γ : Type} (τ τ' : Type*) [ListAcceptingCM τ Γ]
   use t'
   use Polynomial.comp time hdecide.time
   <;> intro w hw
-  · --have := hdecide.accepts w hw
-    specialize hemulate _ _ _ (hdecide.accepts w hw)
-    simpa [htime] using hemulate
-  · specialize hemulate _ _ _ (hdecide.rejects w hw)
-    simpa [htime] using hemulate
+  · unfold AcceptsInTime
+    unfold HaltsInTime ComputationModel.HaltsFromInTime
+    obtain ⟨hhalts, hout⟩ := (hdecide.accepts w hw)
+    --specialize hemulate _ _ _ hout
+
+    constructor
+    · sorry
+    · sorry
+  · sorry
+  --· --have := hdecide.accepts w hw
+    --specialize hemulate _ _ _ (hdecide.accepts w hw)
+    --simpa [htime] using hemulate
+  --· specialize hemulate _ _ _ (hdecide.rejects w hw)
+    --simpa [htime] using hemulate
 
 /- If two computation models are equivalent in Polynomial time,
 then the class `P` agrees for them.

@@ -296,6 +296,16 @@ def MayOutputInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (l' : Option β)
     (n s : ℕ) : Prop :=
   ∃ (run : HaltingRunInTimeAndSpace t l n s), output run.haltState = l'
 
+lemma MayOutputInTime.MayOutput {t : τ} {l : α} {l' : Option β} {n : ℕ} :
+    MayOutputInTime t l l' n → MayOutput t l l' := by
+  rintro ⟨run, h⟩
+  use run.toHaltingRun
+
+lemma MayOutput.exists_MayOutputInTime {t : τ} {l : α} {l' : Option β} :
+    MayOutput t l l' → ∃ n, MayOutputInTime t l l' n := by
+  rintro ⟨run, h⟩
+  use run.μs.length, {run with lengthBound := by rfl}
+
 /-- All terminal computations agree, without asserting termination of every branch. -/
 def OutputUnique (t : τ) (l : α) : Prop :=
   ∀ run₁ run₂ : HaltingRun t l, output run₁.haltState = output run₂.haltState

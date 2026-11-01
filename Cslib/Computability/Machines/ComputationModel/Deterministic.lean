@@ -45,3 +45,4 @@ class DeterministicCM (τ : Type u) [ComputationModel τ] where
 
 
 end Determinism
+end Computation
