@@ -39,8 +39,8 @@ def ResourceUsage.noSpaceValuation (R : ResourceUsage) : Fin 3 → ℕ
   | 1 => R.inputSize
   | 2 => R.outputSize
 
-def ResourceUsage.mk₁ {Γ Γ' : Type} [CompSize Γ] [CompSize Γ']
-    (l : Γ) (l' : Option Γ') (n : ℕ) (s : ℕ) : ResourceUsage where
+def ResourceUsage.mk₁ {α β : Type} [CompSize α] [CompSize β]
+    (l : α) (l' : Option β) (n : ℕ) (s : ℕ) : ResourceUsage where
   time := n
   space := s
   inputSize := compSize l
@@ -49,67 +49,70 @@ def ResourceUsage.mk₁ {Γ Γ' : Type} [CompSize Γ] [CompSize Γ']
 namespace IOComputationModel
 open IOComputationModel
 
-/-- Machine `τ'` emulates (i.e. replicates computations) machine `τ` with overhead `time`. -/
-def EmulatesInTime (Γ Γ' : Type) {α β : Type*} [IOComputationModel α Γ Γ']
-    [IOComputationModel β Γ Γ'] (τ : α) (τ' : β) (time : ℕ → ℕ) :=
-  ∀ ⦃l l' n⦄, MayOutputInTime τ l l' n → MayOutputInTime τ' l l' (time n)
+variable {τ τ' : Type} {τ τ' : Type*} [IOComputationModel τ α β] [IOComputationModel τ' α β]
+
 
 /-- Machine `τ'` emulates (i.e. replicates computations) machine `τ`.. -/
-def Emulates (Γ Γ' : Type) {α β : Type*} [IOComputationModel α Γ Γ'] [IOComputationModel β Γ Γ']
-    (τ : α) (τ' : β) :=
-  ∀ ⦃l l'⦄, MayOutput τ l l' → MayOutput τ' l l'
+def Emulates (t : τ) (t' : τ') :=
+  ∀ ⦃l l'⦄, MayOutput t l l' → MayOutput t' l l'
 
-lemma EmulatesInTime.Emulates {α β : Type} {τ τ' : Type*} [IOComputationModel τ α β]
-    [IOComputationModel τ' α β] {t : τ} (t' : τ') {time : ℕ} (h : EmulatesInTime _ _ t t' time) :
-    Emulates _ _ t t' := by
+/-- Machine `τ'` emulates (i.e. replicates computations) machine `τ` with overhead `time`. -/
+def EmulatesInTime (t : τ) (t' : τ') (time : ℕ → ℕ) :=
+  ∀ ⦃l l' n⦄, MayOutputInTime t l l' n → MayOutputInTime t' l l' (time n)
+
+lemma EmulatesInTime.Emulates {t : τ} (t' : τ') {time : ℕ} (h : EmulatesInTime t t' time) :
+    Emulates t t' := by
   rintro l l' hout
   obtain ⟨_, hout'⟩ := hout.exists_MayOutputInTime
   exact (h hout').MayOutput
 
+
+variable (τ τ')
+
+/--
+An IOComputationModel on `τ` is reducible to `τ'` (in a specified time class),
+if all transducers in `τ` have an emulator in `τ'` with time overhead given by a function
+of the specified time class.
+-/
+def ReducibleInTime (time_class : Set (ℕ → ℕ)) :=
+  ∀ (t : τ), ∃ (t' : τ') (time: time_class), EmulatesInTime t t' time
+
+def EquivalentInTime (time_class : Set (ℕ → ℕ)) :=
+  ReducibleInTime τ τ' time_class ∧ ReducibleInTime τ' τ time_class
+
+
+section Space
+variable [CompSize α] [CompSize β] [SpaceSize τ] [SpaceSize τ']
+
+variable {τ τ'} in
 /--
 Machine `τ'` emulates (i.e. replicates computation) machine `τ` with the specified overheads:
 `time_overhead` and `space_overhead` are both functions taking the four arguments
 `(previous time, previous space, previous input encoding size, previous output encoding size)`
 and are meant to specify the new time and space bounds.
 -/
-def EmulatesInTimeAndSpace (Γ Γ' : Type) [CompSize Γ] [CompSize Γ'] {α β : Type*}
-    [IOComputationModel α Γ Γ'] [SpaceSize α] [IOComputationModel β Γ Γ'] [SpaceSize β]
-    (τ : α) (τ' : β) (timeBound : ResourceUsage → ℕ) (spaceBound : ResourceUsage → ℕ):=
-  ∀ (l : Γ), ∀ (l' : Option Γ') n s,
-    MayOutputInTimeAndSpace τ l l' n s
-    → MayOutputInTimeAndSpace τ' l l'
+def EmulatesInTimeAndSpace (t : τ) (t' : τ') (timeBound : ResourceUsage → ℕ)
+    (spaceBound : ResourceUsage → ℕ) :=
+  ∀ ⦃l l' n s⦄, MayOutputInTimeAndSpace t l l' n s → MayOutputInTimeAndSpace t' l l'
       (timeBound (ResourceUsage.mk₁ l l' n s)) (spaceBound (ResourceUsage.mk₁ l l' n s))
 
-/--
-An IOComputationModel on `α` is reducible to `β` (in a specified time class),
-if all transducers in `α` have an emulator in `β` with time overhead given by a function
-of the specified time class.
--/
-def ReducibleInTime {Γ Γ' : Type} (α β : Type*) [IOComputationModel α Γ Γ']
-    [IOComputationModel β Γ Γ'] (time_class : Set (ℕ → ℕ)) :=
-  ∀ (τ : α), ∃ (τ' : β) (time: time_class), EmulatesInTime Γ Γ' τ τ' time
+--lemma EmulatesInTimeAndSpace.EmulatesInTime
 
-def EquivalentInTime {Γ Γ' : Type} (α β : Type*) [IOComputationModel α Γ Γ']
-    [IOComputationModel β Γ Γ'] (time_class : Set (ℕ → ℕ)) :=
-  ReducibleInTime α β time_class ∧ ReducibleInTime β α time_class
-
-def ReducibleInTimeAndSpace {Γ Γ' : Type} [CompSize Γ] [CompSize Γ'] (α β : Type u)
-    [IOComputationModel α Γ Γ'] [SpaceSize α] [IOComputationModel β Γ Γ']
-    [SpaceSize β] (timeBounds : Set (ResourceUsage → ℕ))
+def ReducibleInTimeAndSpace (timeBounds : Set (ResourceUsage → ℕ))
     (spaceBounds : Set (ResourceUsage → ℕ)) :=
-  ∀ (τ : α), ∃ (τ' : β) (timeBound : timeBounds) (spaceBound : spaceBounds),
-    EmulatesInTimeAndSpace Γ Γ' τ τ' timeBound spaceBound
+  ∀ (t : τ), ∃ (t' : τ') (timeBound : timeBounds) (spaceBound : spaceBounds),
+    EmulatesInTimeAndSpace t t' timeBound spaceBound
 
-def EquivalentInTimeAndSpace {Γ Γ' : Type} [CompSize Γ] [CompSize Γ'] (α β : Type u)
-    [IOComputationModel α Γ Γ'] [SpaceSize α] [IOComputationModel β Γ Γ']
-    [SpaceSize β] (timeBounds : Set (ResourceUsage → ℕ))
+def EquivalentInTimeAndSpace (timeBounds : Set (ResourceUsage → ℕ))
     (spaceBounds : Set (ResourceUsage → ℕ)) :=
-  ReducibleInTimeAndSpace α β timeBounds spaceBounds ∧
-    ReducibleInTimeAndSpace β α timeBounds spaceBounds
+  ReducibleInTimeAndSpace τ τ' timeBounds spaceBounds ∧
+    ReducibleInTimeAndSpace τ' τ timeBounds spaceBounds
+
+
+end Space
 
 
 end IOComputationModel
-
 
 -- TODO: Make it easier to work with these classes
 
