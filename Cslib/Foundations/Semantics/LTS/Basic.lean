@@ -75,6 +75,11 @@ def UnlabelledTr (lts : LTS State Label) : State → State → Prop :=
 def IsTerminal (lts : LTS State Label) (s : State) : Prop :=
   ∀ μ s', ¬lts.Tr s μ s'
 
+lemma IsTerminal.iff_UnlabelledTr {lts : LTS State Label} {s : State} :
+    lts.IsTerminal s ↔ ∀ s', ¬ lts.UnlabelledTr s s' := by
+  simp [IsTerminal, UnlabelledTr]
+  tauto
+
 section MultiStep
 
 /-! ## Multistep transitions and executions with finite traces

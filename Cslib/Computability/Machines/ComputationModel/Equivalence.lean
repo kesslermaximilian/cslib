@@ -46,7 +46,7 @@ def ResourceUsage.mk₁ {α β : Type} [CompSize α] [CompSize β]
   inputSize := compSize l
   outputSize := compSize l'
 
-namespace IOComputationModel
+namespace ComputationModel.NonDeterministic
 open IOComputationModel
 
 variable {τ τ' : Type} {τ τ' : Type*} [IOComputationModel τ α β] [IOComputationModel τ' α β]
@@ -65,6 +65,13 @@ lemma EmulatesInTime.Emulates {t : τ} (t' : τ') {time : ℕ} (h : EmulatesInTi
   rintro l l' hout
   obtain ⟨_, hout'⟩ := hout.exists_MayOutputInTime
   exact (h hout').MayOutput
+
+lemma EmulatesInTime.Halts {t : τ} {t' : τ'} {time : ℕ → ℕ} (h : EmulatesInTime t t' time) :
+    ∀ ⦃l n⦄, HaltsInTime t l n → HaltsInTime t' l (time n) := by
+  intro l n h
+  -- TODO: Cannot actually prove this rn
+
+  sorry
 
 
 variable (τ τ')
@@ -111,8 +118,7 @@ def EquivalentInTimeAndSpace (timeBounds : Set (ResourceUsage → ℕ))
 
 end Space
 
-
-end IOComputationModel
+end NonDeterministic
 
 -- TODO: Make it easier to work with these classes
 
@@ -283,6 +289,7 @@ theorem P_constant_aux {Γ : Type} (τ τ' : Type*) [ListAcceptingCM τ Γ]
   · unfold AcceptsInTime
     unfold HaltsInTime ComputationModel.HaltsFromInTime
     obtain ⟨hhalts, hout⟩ := (hdecide.accepts w hw)
+
     --specialize hemulate _ _ _ hout
 
     constructor

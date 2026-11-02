@@ -91,7 +91,7 @@ context.
 -/
 class IOComputationModel (τ : Type u) (α β : outParam Type) extends ComputationModel τ
     where
-  init {t : τ} : α → cfg t
+  init (t : τ) : α → cfg t
   output {t : τ} : cfg t → Option β
 
 -- Configuration and label universes are independent and occur together in these aliases.
@@ -110,7 +110,63 @@ set_option linter.checkUnivs false in
 abbrev ListAcceptingCM (τ : Type*) (Γ : Type) := IOComputationModel τ (List Γ) Bool
 
 namespace ComputationModel
+open IOComputationModel
 
+
+section Executions
+
+variable {τ : Type u} {α β : Type} [IOComputationModel τ α β]
+
+/-- A valid execution sequence in the configuraiton space of this machine with input `l`. -/
+structure Run (t : τ) (l : α) where
+  μs : List (label t)
+  ss : List (cfg t)
+  haltState : (cfg t)
+  isExecution : LTS.Execution (lts t) (init t l) μs haltState ss
+
+/-- A valid execution sequence that halts. -/
+structure HaltingRun (t : τ) (l : α) extends Run t l where
+  haltState_halts : (lts t).IsTerminal haltState
+
+/--
+A valid execution sequence that halts within time bound `n`.
+-/
+structure HaltingRunInTime (t : τ) (l : α) (n : ℕ) extends HaltingRun t l where
+  lengthBound : μs.length ≤ n
+
+/-- A terminal run whose length and every visited state's space usage respect the bounds. -/
+structure HaltingRunInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ)
+    extends HaltingRunInTime t l n where
+  size_bound : ∀ state ∈ ss, SpaceSize.space_used state ≤ s
+
+end Executions
+
+section Halting
+variable {τ : Type u} [ComputationModel τ]
+
+/-- A configuration is halted if it is terminal in the LTS of its machine. -/
+def Halted {t : τ} (c : cfg t) : Prop :=
+  (lts t).IsTerminal c
+
+/-- The one-step relation on configurations. A halted configuration steps only to itself. A running
+configuration steps by using any label of the LTS. -/
+def Step {t : τ} (c c' : cfg t) : Prop :=
+  (lts t).UnlabelledTr c c' ∨ (Halted c ∧ c = c')
+
+/-- A halted configuration steps only to itself. -/
+lemma step_of_halt {t : τ} {c c' : cfg t} (h : Halted c) :
+    Step c c' ↔ c' = c := by
+  have := h
+  rw [Halted, LTS.IsTerminal.iff_UnlabelledTr] at this
+  simp [Step, this, h, eq_comm]
+
+/-- A non-halted configuration steps using the `UnlabelledTr` of the LTS. -/
+lemma step_of_nHalt {t : τ} {c c' : cfg t} (h : ¬ Halted c) :
+    Step c c' ↔ (lts t).UnlabelledTr c c' := by
+  simp [Step, h]
+
+end Halting
+namespace NonDeterministic
 variable {τ : Type u} [ComputationModel τ]
 
 /-- Every execution starting at `a` is finite, for every nondeterministic choice. -/
@@ -190,33 +246,9 @@ theorem EvalsToInTime.evalsTo (h : EvalsToInTime t a b n) : EvalsTo t a b := h.t
     --EvalsToInTime t a b n ↔ Relation.RelatesWithinSteps (lts t).UnlabelledTr a b n :=
   --(lts t).relatesWithinSteps_unlabelledTr_iff.symm
 
-end ComputationModel
-
-namespace IOComputationModel
-open ComputationModel
 
 variable {τ : Type*} {α β : Type} [IOComputationModel τ α β]
 
-/--
-A valid execution sequence that halts.
--/
-structure HaltingRun (t : τ) (l : α) where
-  μs : List (label t)
-  ss : List (cfg t)
-  haltState : (cfg t)
-  haltState_halts : (lts t).IsTerminal haltState
-  isExecution : LTS.Execution (lts t) (init l) μs haltState ss
-
-/--
-A valid execution sequence that halts within time bound `n`.
--/
-structure HaltingRunInTime (t : τ) (l : α) (n : ℕ) extends HaltingRun t l where
-  lengthBound : μs.length ≤ n
-
-/-- A terminal run whose length and every visited state's space usage respect the bounds. -/
-structure HaltingRunInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ)
-    extends HaltingRunInTime t l n where
-  size_bound : ∀ state ∈ ss, SpaceSize.space_used state ≤ s
 
 /-- At least one computation on `l` reaches a terminal configuration. -/
 def MayHalt (t : τ) (l : α) : Prop :=
@@ -224,7 +256,7 @@ def MayHalt (t : τ) (l : α) : Prop :=
 
 /-- Every computation on `l` terminates. No uniform time bound is asserted. -/
 def Halts (t : τ) (l : α) : Prop :=
-  HaltsFrom t (init l)
+  HaltsFrom t (init t l)
 
 /-- Universal halting guarantees that at least one terminal run exists. -/
 theorem Halts.mayHalt {t : τ} {l : α} (h : Halts t l) : MayHalt t l := by
@@ -260,7 +292,7 @@ def MayHaltInTime (t : τ) (l : α) (n : ℕ) : Prop :=
 
 /-- Every computation on `l` terminates within `n` transitions. -/
 def HaltsInTime (t : τ) (l : α) (n : ℕ) : Prop :=
-  HaltsFromInTime t (init l) n
+  HaltsFromInTime t (init t l) n
 
 theorem HaltsInTime.mono {t : τ} {l : α} : Monotone (HaltsInTime t l ·) := by
   exact HaltsFromInTime.mono
@@ -281,7 +313,7 @@ theorem HaltsInTime.mayHaltInTime {t : τ} {l : α} {n : ℕ} (h : HaltsInTime t
 /-- All execution prefixes respect both the time and space bounds. -/
 def HaltsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n s : ℕ) : Prop :=
   HaltsInTime t l n ∧ ∀ ⦃μs : List (label t)⦄ ⦃b : cfg t⦄ ⦃ss : List (cfg t)⦄,
-    (lts t).Execution (init l) μs b ss → ∀ state ∈ ss, SpaceSize.space_used state ≤ s
+    (lts t).Execution (init t l) μs b ss → ∀ state ∈ ss, SpaceSize.space_used state ≤ s
 
 /-- Some terminal computation has the specified output, regardless of other branches. -/
 def MayOutput (t : τ) (l : α) (l' : Option β) : Prop :=
@@ -386,10 +418,8 @@ structure PolyTimeComputable {Γ Γ' : Type} [CompSize Γ]
   poly : Polynomial ℕ
   bounds (n : ℕ) : timeBound n ≤ poly.eval n
 
-end IOComputationModel
 
-
-namespace AcceptingCM
+section AcceptingCM
 open IOComputationModel
 
 variable {τ : Type*} {α : Type} [AcceptingCM τ α]
@@ -427,5 +457,8 @@ theorem RejectsInTime.not_acceptsInTime {t : τ} {l : α} {n m : ℕ}
 
 end AcceptingCM
 
+end NonDeterministic
+
+end ComputationModel
 
 end Computation
