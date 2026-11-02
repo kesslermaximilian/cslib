@@ -34,44 +34,47 @@ A computer is deterministic if for every given state, there is at least one reac
 Note that this is different than `(lts t).Deterministic`, since we require a unique reachable state
 regardless of label.
 -/
-def DeterministicComputer {τ : Type u} [ComputationModel τ] (t : τ) :=
-  ∀ ⦃a b b' : cfg t⦄, (lts t).UnlabelledTr a b → (lts t).UnlabelledTr a b' → b = b'
+def DeterministicComputer {τ : Type u} {α β : Type} [IOComputationModel τ α β] (t : τ) :=
+  ∀ ⦃l⦄ ⦃a b b': cfg t l⦄, (lts t l).UnlabelledTr a b → (lts t l).UnlabelledTr a b' → b = b'
 
 /-- A computaton model is deterministic if all its computers are deterministic. -/
-class DeterministicCM (τ : Type u) [ComputationModel τ] where
+class DeterministicCM (τ : Type u) {α β : Type} [IOComputationModel τ α β] where
   deterministic (t : τ) : DeterministicComputer t
+
 
 namespace Deterministic
 
-variable {τ : Type*} {α β : Type} [IOComputationModel τ α β] [DeterministicCM τ] {t : τ}
+variable {τ : Type*} {α β : Type} [IOComputationModel τ α β] [d : DeterministicCM τ] {t : τ} {l : α}
 
-lemma existsUnique_step (cfg : cfg t) :
+lemma existsUnique_step (cfg : cfg t l) :
     ∃! cfg', Step cfg cfg' := by
   by_cases h : Halted cfg
   · simp [step_of_halt h]
   · simp_rw [step_of_nHalt h]
     apply existsUnique_of_exists_of_unique
     · simpa [Halted, Cslib.LTS.IsTerminal.iff_UnlabelledTr] using h
-    · grind [DeterministicComputer, DeterministicCM.deterministic t]
+    · simp only [Halted, Cslib.LTS.IsTerminal, not_forall, not_not] at h
+      grind [DeterministicComputer, d.deterministic t]
+
 
 /-- The unique successor configuration related to `cfg` by the inherited step relation. -/
-noncomputable def step {t : τ} (c : cfg t) : cfg t :=
+noncomputable def step {t : τ} (c : cfg t l) : cfg t l :=
   (existsUnique_step c).choose
 
 /-- `Step` relates `c` to `c'` exactly when `step c = c'`. -/
 @[simp, scoped grind =]
-lemma step_iff {c c' : cfg t} : Step c c' ↔ step c = c' := by
+lemma step_iff {c c' : cfg t l} : Step c c' ↔ step c = c' := by
   unfold step
   exact (ExistsUnique.choose_eq_iff _).symm
 
 /-- The configuration reached by running the machine for `n` steps from `c`.
 If the machine halts, it will stay at the halting configuration. -/
-noncomputable def runFrom (t : τ) (c : cfg t) (n : ℕ) : ComputationModel.cfg t :=
+noncomputable def runFrom (t : τ) (c : cfg t l) (n : ℕ) : IOComputationModel.cfg t l :=
   step^[n] c
 
 /-- The machine eventually halts on `input` with the given `output`. -/
 def Computes {t : τ} (l : α) (l' : Option β) : Prop :=
-  ∃ u, Halted (runFrom t (init l) u) ∧ output (runFrom t (init l) u) = l'
+  ∃ u, Halted (runFrom t (init t l) u) ∧ output (runFrom t (init t l) u) = l'
 
 
 

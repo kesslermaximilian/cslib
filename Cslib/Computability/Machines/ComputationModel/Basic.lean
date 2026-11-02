@@ -68,31 +68,28 @@ open Cslib
 
 open CompSize
 
-/-- A configuration type, label type, and labelled transition system for each computer. -/
-class ComputationModel (τ : Type u) where
-  /-- Configuration type (or state type) associated with a computer -/
-  cfg (t : τ) : Type v
-  /-- Label type associated with the LTS of a computer -/
-  label (t : τ) : Type w
-  /-- Resulting LTS of a computer -/
-  lts (t : τ) : LTS (cfg t) (label t)
-
-/--
-Configurations of (computers of) this `ComputationModel` have a notion of occupied space,
-measured in `ℕ`. -/
-class SpaceSize (τ : Type u) [ComputationModel τ] where
-  space_used {t : τ} : ComputationModel.cfg t → ℕ
-
 /--
 Bundles a `ComputationModel` with input and output functions from/to types `α` and `β`.
 This way, we can think of elements of `τ` as allowing computations `α → β` by lifting inputs into
 the computation context, following labelled transitions and taking output from this computation
 context.
 -/
-class IOComputationModel (τ : Type u) (α β : outParam Type) extends ComputationModel τ
+class IOComputationModel (τ : Type u) (α β : outParam Type)
     where
-  init (t : τ) : α → cfg t
-  output {t : τ} : cfg t → Option β
+  /-- Configuration type (or state type) associated with a computer -/
+  cfg (t : τ) (a : α) : Type v
+  /-- Label type associated with the LTS of a computer -/
+  label (t : τ) : Type w
+  /-- Resulting LTS of a computer -/
+  lts (t : τ) (a : α) : LTS (cfg t a) (label t)
+  init (t : τ) (a : α) : cfg t a
+  output {t : τ} {a : α} : cfg t a → Option β
+
+/--
+Configurations of (computers of) this `ComputationModel` have a notion of occupied space,
+measured in `ℕ`. -/
+class SpaceSize (τ : Type u) [IOComputationModel τ α β] where
+  space_used {t : τ} {a : α} : IOComputationModel.cfg t a → ℕ
 
 -- Configuration and label universes are independent and occur together in these aliases.
 set_option linter.checkUnivs false in
@@ -120,13 +117,13 @@ variable {τ : Type u} {α β : Type} [IOComputationModel τ α β]
 /-- A valid execution sequence in the configuraiton space of this machine with input `l`. -/
 structure Run (t : τ) (l : α) where
   μs : List (label t)
-  ss : List (cfg t)
-  haltState : (cfg t)
-  isExecution : LTS.Execution (lts t) (init t l) μs haltState ss
+  ss : List (cfg t l)
+  haltState : (cfg t l)
+  isExecution : LTS.Execution (lts t l) (init t l) μs haltState ss
 
 /-- A valid execution sequence that halts. -/
 structure HaltingRun (t : τ) (l : α) extends Run t l where
-  haltState_halts : (lts t).IsTerminal haltState
+  haltState_halts : (lts t l).IsTerminal haltState
 
 /--
 A valid execution sequence that halts within time bound `n`.
@@ -142,55 +139,55 @@ structure HaltingRunInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s
 end Executions
 
 section Halting
-variable {τ : Type u} [ComputationModel τ]
+variable {τ : Type u} [IOComputationModel τ α β]
 
 /-- A configuration is halted if it is terminal in the LTS of its machine. -/
-def Halted {t : τ} (c : cfg t) : Prop :=
-  (lts t).IsTerminal c
+def Halted {t : τ} {l : α} (c : cfg t l) : Prop :=
+  (lts t l).IsTerminal c
 
 /-- The one-step relation on configurations. A halted configuration steps only to itself. A running
 configuration steps by using any label of the LTS. -/
-def Step {t : τ} (c c' : cfg t) : Prop :=
-  (lts t).UnlabelledTr c c' ∨ (Halted c ∧ c = c')
+def Step {t : τ} {l : α} (c c' : cfg t l) : Prop :=
+  (lts t l).UnlabelledTr c c' ∨ (Halted c ∧ c = c')
 
 /-- A halted configuration steps only to itself. -/
-lemma step_of_halt {t : τ} {c c' : cfg t} (h : Halted c) :
+lemma step_of_halt {t : τ} {l : α} {c c' : cfg t l} (h : Halted c) :
     Step c c' ↔ c' = c := by
   have := h
   rw [Halted, LTS.IsTerminal.iff_UnlabelledTr] at this
   simp [Step, this, h, eq_comm]
 
 /-- A non-halted configuration steps using the `UnlabelledTr` of the LTS. -/
-lemma step_of_nHalt {t : τ} {c c' : cfg t} (h : ¬ Halted c) :
-    Step c c' ↔ (lts t).UnlabelledTr c c' := by
+lemma step_of_nHalt {t : τ} {l : α} {c c' : cfg t l} (h : ¬ Halted c) :
+    Step c c' ↔ (lts t l).UnlabelledTr c c' := by
   simp [Step, h]
 
 end Halting
 namespace NonDeterministic
-variable {τ : Type u} [ComputationModel τ]
+variable {τ : Type*} {α β : Type} [IOComputationModel τ α β]
 
 /-- Every execution starting at `a` is finite, for every nondeterministic choice. -/
-def HaltsFrom (t : τ) (a : cfg t) : Prop :=
-  Relation.SN (lts t).UnlabelledTr a
+def HaltsFrom (t : τ) {l : α} (a : cfg t l) : Prop :=
+  Relation.SN (lts t l).UnlabelledTr a
 
 /-- Every execution prefix starting at `a` contains at most `n` transitions. -/
-def HaltsFromInTime (t : τ) (a : cfg t) (n : ℕ) : Prop :=
-  ∀ ⦃μs : List (label t)⦄ ⦃b : cfg t⦄, (lts t).MTr a μs b → μs.length ≤ n
+def HaltsFromInTime (t : τ) {l : α} (a : cfg t l) (n : ℕ) : Prop :=
+  ∀ ⦃μs : List (label t)⦄ ⦃b : cfg t l⦄, (lts t l).MTr a μs b → μs.length ≤ n
 
-variable {t : τ} {a b : cfg t} {n : ℕ}
+variable {t : τ} {l : α} {a b : cfg t l} {n : ℕ}
 
 /-- Universal halting is preserved by reachability. -/
-theorem HaltsFrom.of_canReach (h : HaltsFrom t a) (hab : (lts t).CanReach a b) :
+theorem HaltsFrom.of_canReach (h : HaltsFrom t a) (hab : (lts t l).CanReach a b) :
     HaltsFrom t b :=
-  h.of_rel_reflTransGen ((lts t).reflTransGen_unlabelledTr_iff.mpr hab)
+  h.of_rel_reflTransGen ((lts t l).reflTransGen_unlabelledTr_iff.mpr hab)
 
 /-- Execution bounds can be increased. -/
 theorem HaltsFromInTime.mono : Monotone (HaltsFromInTime t a ·) :=
   fun _ _ hnm h _ _ hex => (h hex).trans hnm
 
 /-- Taking successor state reduces time bound by one. -/
-theorem HaltsFromInTime.succ {a b : (cfg t)} {μ : (label t)} (h : HaltsFromInTime t a (n + 1))
-    (htr : (lts t).Tr a μ b) : HaltsFromInTime t b n := by
+theorem HaltsFromInTime.succ {a b : (cfg t l)} {μ : (label t)} (h : HaltsFromInTime t a (n + 1))
+    (htr : (lts t l).Tr a μ b) : HaltsFromInTime t b n := by
   intro _ _ hmtr
   simpa using h (hmtr.stepL htr)
 
@@ -206,7 +203,7 @@ theorem HaltsFromInTime.haltsFrom (h : HaltsFromInTime t a n) : HaltsFrom t a :=
       exact ih (HaltsFromInTime.succ h htr)
 
 /-- Halting in time zero is the same as being a terminal configuration -/
-theorem haltsFromInTime_zero_iff : HaltsFromInTime t a 0 ↔ (lts t).IsTerminal a := by
+theorem haltsFromInTime_zero_iff : HaltsFromInTime t a 0 ↔ (lts t l).IsTerminal a := by
   constructor
   · intro h _ _ htr
     simpa using h (LTS.MTr.single _ htr)
@@ -216,17 +213,17 @@ theorem haltsFromInTime_zero_iff : HaltsFromInTime t a 0 ↔ (lts t).IsTerminal 
     | stepL htr _ => exact (h _ _ htr).elim
 
 /-- Reachability in the computer's labelled transition system. -/
-def EvalsTo (t : τ) (a b : cfg t) := LTS.CanReach (lts t) a b
+def EvalsTo (t : τ) (a b : cfg t l) := LTS.CanReach (lts t l) a b
 
 /--
 The machine `t` reaches `b` from `a` in at most `n` steps.
 -/
-def EvalsToInTime (t : τ) (a b : cfg t) (n : ℕ) :=
-  LTS.CanReachIn (lts t) a b n
+def EvalsToInTime (t : τ) (a b : cfg t l) (n : ℕ) :=
+  LTS.CanReachIn (lts t l) a b n
 
-variable {t : τ} {a b c : cfg t} {n n₁ n₂ : ℕ}
+variable {t : τ} {a b c : cfg t l} {n n₁ n₂ : ℕ}
 
-lemma EvalsTo.refl : EvalsTo t a a := LTS.CanReach.refl (lts t) a
+lemma EvalsTo.refl : EvalsTo t a a := LTS.CanReach.refl (lts t l) a
 
 lemma EvalsTo.trans (h₁ : EvalsTo t a b) (h₂ : EvalsTo t b c) : EvalsTo t a c
   := LTS.CanReach.trans h₁ h₂
@@ -261,7 +258,7 @@ def Halts (t : τ) (l : α) : Prop :=
 /-- Universal halting guarantees that at least one terminal run exists. -/
 theorem Halts.mayHalt {t : τ} {l : α} (h : Halts t l) : MayHalt t l := by
   obtain ⟨haltState, hr, hnormal⟩ := h.normalizable
-  obtain ⟨μs, hex⟩ := (lts t).reflTransGen_unlabelledTr_iff.mp hr
+  obtain ⟨μs, hex⟩ := (lts t l).reflTransGen_unlabelledTr_iff.mp hr
   obtain ⟨ss, hss⟩ := LTS.Execution.of_mTr hex
   exact Nonempty.intro {
     μs := μs
@@ -312,8 +309,8 @@ theorem HaltsInTime.mayHaltInTime {t : τ} {l : α} {n : ℕ} (h : HaltsInTime t
 
 /-- All execution prefixes respect both the time and space bounds. -/
 def HaltsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n s : ℕ) : Prop :=
-  HaltsInTime t l n ∧ ∀ ⦃μs : List (label t)⦄ ⦃b : cfg t⦄ ⦃ss : List (cfg t)⦄,
-    (lts t).Execution (init t l) μs b ss → ∀ state ∈ ss, SpaceSize.space_used state ≤ s
+  HaltsInTime t l n ∧ ∀ ⦃μs : List (label t)⦄ ⦃b : cfg t l⦄ ⦃ss : List (cfg t l)⦄,
+    (lts t l).Execution (init t l) μs b ss → ∀ state ∈ ss, SpaceSize.space_used state ≤ s
 
 /-- Some terminal computation has the specified output, regardless of other branches. -/
 def MayOutput (t : τ) (l : α) (l' : Option β) : Prop :=
