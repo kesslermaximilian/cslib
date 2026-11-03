@@ -47,9 +47,9 @@ namespace Deterministic
 variable {τ : Type*} {α β : Type} [IOComputationModel τ α β] [d : DeterministicCM τ] {t : τ} {l : α}
 
 lemma existsUnique_step (cfg : cfg t l) :
-    ∃! cfg', Step cfg cfg' := by
-  by_cases h : Stuck cfg
-  · simp [step_of_halt h]
+    ∃! cfg', Step t cfg cfg' := by
+  by_cases h : Stuck t cfg
+  · simp [step_of_Halt h]
   · simp_rw [step_of_nHalt h]
     apply existsUnique_of_exists_of_unique
     · simpa [Stuck, Cslib.LTS.IsTerminal.iff_UnlabelledTr] using h

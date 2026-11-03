@@ -94,6 +94,8 @@ Configurations of (computers of) this `ComputationModel` have a notion of occupi
 measured in `ℕ`. -/
 class SpaceSize (τ : Type u) [IOComputationModel τ α β] where
   spaceUsed {t : τ} {a : α} : List (IOComputationModel.cfg t a) → ℕ
+  monotone {t : τ} {a : α} : ∀ (ss ss' : List (IOComputationModel.cfg t a)),
+    ss.IsPrefix ss' → spaceUsed ss ≤ spaceUsed ss'
 
 -- Configuration and label universes are independent and occur together in these aliases.
 set_option linter.checkUnivs false in
@@ -113,59 +115,9 @@ abbrev ListAcceptingCM (τ : Type*) (Γ : Type) := IOComputationModel τ (List �
 namespace ComputationModel
 open IOComputationModel
 
-
-section Executions
-
 variable {τ : Type u} {α β : Type} [IOComputationModel τ α β]
 
-/-- A valid execution sequence in the configuraiton space of this machine with input `l`. -/
-structure Run (t : τ) (l : α) where
-  μs : List (label t)
-  ss : List (cfg t l)
-  lastState : (cfg t l)
-  isExecution : LTS.Execution (lts t l) (init t l) μs lastState ss
-
-/-- A valid execution sequence that terminates. -/
-structure TerminatingRun (t : τ) (l : α) extends Run t l where
-  lastState_Terminal : (lts t l).IsTerminal lastState
-
-/-- A valid execution sequence that halts (and in particular, terminates). -/
-structure HaltingRun (t : τ) (l : α) extends TerminatingRun t l where
-  lastState_halts : Halted t lastState
-
-/-- Construct a halting run from a run whose last state is halted. -/
-def HaltingRun.of_Run_Halted {t : τ} {l : α} (run : Run t l) (h : Halted t run.lastState) :
-    HaltingRun t l where
-  toRun := run
-  lastState_halts := h
-  lastState_Terminal := Terminal_of_Halted h
-
-structure RunInTime (t : τ) (l : α) (n : ℕ) extends Run t l where
-  lengthBound : μs.length ≤ n
-
-structure TerminatingRunInTime (t : τ) (l : α) (n : ℕ)
-  extends RunInTime t l n, TerminatingRun t l
-
-/--
-A valid execution sequence that halts within time bound `n`.
--/
-structure HaltingRunInTime (t : τ) (l : α) (n : ℕ)
-  extends TerminatingRunInTime t l n, HaltingRun t l
-
-structure RunInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ)
-    extends RunInTime t l n where
-  spaceBound : SpaceSize.spaceUsed ss ≤ s
-
-structure TerminatingRunInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ)
-    extends RunInTimeAndSpace t l n s, TerminatingRunInTime t l n
-
-structure HaltingRunInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ)
-  extends TerminatingRunInTimeAndSpace t l n s, HaltingRunInTime t l n
-
-end Executions
-
 section Halting
-variable {τ : Type u} [IOComputationModel τ α β]
 
 /--
 A configuration is `Stuck` if it is terminal in the LTS of its machine, i.e. there is no
@@ -191,6 +143,103 @@ lemma Step_of_nHalted {t : τ} {l : α} {c c' : cfg t l} (h : ¬ Halted t c) :
   simp [Step, h]
 
 end Halting
+
+section Runs
+variable (t : τ) (l : α) (n s : ℕ)
+
+/-- A valid execution sequence in the configuraiton space of this machine with input `l`. -/
+structure Run where
+  μs : List (label t)
+  ss : List (cfg t l)
+  lastState : (cfg t l)
+  isExecution : LTS.Execution (lts t l) (init t l) μs lastState ss
+
+/-- A valid execution sequence that terminates. -/
+structure TerminatingRun extends Run t l where
+  lastState_Terminal : (lts t l).IsTerminal lastState
+
+/-- A valid execution sequence that halts (and in particular, terminates). -/
+structure HaltingRun extends TerminatingRun t l where
+  lastState_halts : Halted t lastState
+
+variable {t l} in
+/-- Construct a halting run from a run whose last state is halted. -/
+def HaltingRun.of_Run_Halted (run : Run t l) (h : Halted t run.lastState) :
+    HaltingRun t l where
+  toRun := run
+  lastState_halts := h
+  lastState_Terminal := Terminal_of_Halted h
+
+structure RunInTime extends Run t l where
+  lengthBound : μs.length ≤ n
+
+structure TerminatingRunInTime
+  extends RunInTime t l n, TerminatingRun t l
+
+/--
+A valid execution sequence that halts within time bound `n`.
+-/
+structure HaltingRunInTime
+  extends TerminatingRunInTime t l n, HaltingRun t l
+
+variable [SpaceSize τ]
+
+structure RunInTimeAndSpace extends RunInTime t l n where
+  spaceBound : SpaceSize.spaceUsed ss ≤ s
+
+structure TerminatingRunInTimeAndSpace
+  extends RunInTimeAndSpace t l n s, TerminatingRunInTime t l n
+
+structure HaltingRunInTimeAndSpace
+  extends TerminatingRunInTimeAndSpace t l n s, HaltingRunInTime t l n
+
+
+/- TODO: Analogue versions of this for the other notions? -/
+/--
+Time bounds of `TerminatingRunInTime` can be increased.
+-/
+def TerminatingRunInTime.mono {t : τ} {n m : ℕ} {l : α} (hnm : n ≤ m)
+    (hv : TerminatingRunInTime t l n) : TerminatingRunInTime t l m where
+  μs := hv.μs
+  ss := hv.ss
+  lastState := hv.lastState
+  lastState_Terminal := hv.lastState_Terminal
+  isExecution := hv.isExecution
+  lengthBound := Nat.le_trans hv.lengthBound hnm
+
+end Runs
+
+
+section Reachability
+
+/-- Reachability in the computer's labelled transition system. -/
+def EvalsTo {l : α} (t : τ) (a b : cfg t l) := LTS.CanReach (lts t l) a b
+
+/--
+The machine `t` reaches `b` from `a` in at most `n` steps.
+-/
+def EvalsToInTime (t : τ) (a b : cfg t l) (n : ℕ) :=
+  LTS.CanReachIn (lts t l) a b n
+
+variable {l : α} {t : τ} {a b c : cfg t l} {n n₁ n₂ : ℕ}
+
+lemma EvalsTo.refl : EvalsTo t a a := LTS.CanReach.refl (lts t l) a
+
+lemma EvalsTo.trans (h₁ : EvalsTo t a b) (h₂ : EvalsTo t b c) : EvalsTo t a c
+  := LTS.CanReach.trans h₁ h₂
+
+lemma EvalsToInTime.refl : EvalsToInTime t a a 0 := LTS.CanReachIn.refl _ _
+
+lemma EvalsToInTime.trans (h₁ : EvalsToInTime t a b n₁) (h₂ : EvalsToInTime t b c n₂) :
+    EvalsToInTime t a c (n₁ + n₂) := LTS.CanReachIn.trans h₁ h₂
+
+lemma EvalsToInTime.mono : Monotone (EvalsToInTime t a b ·) := LTS.CanReachIn.mono _
+
+/-- A bounded execution also witnesses unbounded reachability. -/
+theorem EvalsToInTime.evalsTo (h : EvalsToInTime t a b n) : EvalsTo t a b := h.toCanReach
+
+end Reachability
+
 namespace NonDeterministic
 variable {τ : Type*} {α β : Type} [IOComputationModel τ α β]
 
@@ -251,40 +300,6 @@ theorem terminatesFromInTime_zero_iff_Stuck : TerminatesFromInTime t a 0 ↔ Stu
     | refl => simp
     | stepL htr _ => exact (h _ _ htr).elim
 
-/-- Reachability in the computer's labelled transition system. -/
-def EvalsTo (t : τ) (a b : cfg t l) := LTS.CanReach (lts t l) a b
-
-/--
-The machine `t` reaches `b` from `a` in at most `n` steps.
--/
-def EvalsToInTime (t : τ) (a b : cfg t l) (n : ℕ) :=
-  LTS.CanReachIn (lts t l) a b n
-
-variable {t : τ} {a b c : cfg t l} {n n₁ n₂ : ℕ}
-
-lemma EvalsTo.refl : EvalsTo t a a := LTS.CanReach.refl (lts t l) a
-
-lemma EvalsTo.trans (h₁ : EvalsTo t a b) (h₂ : EvalsTo t b c) : EvalsTo t a c
-  := LTS.CanReach.trans h₁ h₂
-
-lemma EvalsToInTime.refl : EvalsToInTime t a a 0 := LTS.CanReachIn.refl _ _
-
-lemma EvalsToInTime.trans (h₁ : EvalsToInTime t a b n₁) (h₂ : EvalsToInTime t b c n₂) :
-    EvalsToInTime t a c (n₁ + n₂) := LTS.CanReachIn.trans h₁ h₂
-
-lemma EvalsToInTime.mono : Monotone (EvalsToInTime t a b ·) := LTS.CanReachIn.mono _
-
-/-- A bounded execution also witnesses unbounded reachability. -/
-theorem EvalsToInTime.evalsTo (h : EvalsToInTime t a b n) : EvalsTo t a b := h.toCanReach
-
-/- Recover the counted-relation API by forgetting transition labels. -/
---theorem evalsToInTime_iff_relatesWithinSteps :
-    --EvalsToInTime t a b n ↔ Relation.RelatesWithinSteps (lts t).UnlabelledTr a b n :=
-  --(lts t).relatesWithinSteps_unlabelledTr_iff.symm
-
-
-variable {τ : Type*} {α β : Type} [IOComputationModel τ α β]
-
 
 /-- At least one computation on `l` reaches a halting configuration. -/
 def MayTerminate (t : τ) (l : α) : Prop :=
@@ -323,17 +338,6 @@ theorem Halts.mayHalt {t : τ} (l : α) (h : Halts t l) : MayHalt t l := by
   obtain ⟨run⟩ := h.terminates.mayTerminate
   exact Nonempty.intro {run with lastState_halts := h.notStuck run}
 
-/--
-Time bounds of `HaltingRunInTime` can be increased.
--/
-def HaltingRunInTime.mono {t : τ} {n m : ℕ} {l : α} (hnm : n ≤ m)
-    (hv : TerminatingRunInTime t l n) : TerminatingRunInTime t l m where
-  μs := hv.μs
-  ss := hv.ss
-  lastState := hv.lastState
-  lastState_Terminal := hv.lastState_Terminal
-  isExecution := hv.isExecution
-  lengthBound := Nat.le_trans hv.lengthBound hnm
 
 /-- At least one computation terminates within `n` transitions. -/
 def MayTerminateInTime (t : τ) (l : α) (n : ℕ) : Prop :=
@@ -346,8 +350,6 @@ def TerminatesInTime (t : τ) (l : α) (n : ℕ) : Prop :=
 /-- Every computation on `l` halts. No uniform time bound is asserted. -/
 def HaltsInTime (t : τ) (l : α) (n : ℕ) : Prop :=
   ∀ run : Run t l, n ≤ run.μs.length → Halted t run.lastState
-
---lemma HaltsInTime.terminatesInTime {t : τ} {l : α} {n : ℕ} (h : HaltsInTime )
 
 theorem TerminatesInTime.mono {t : τ} {l : α} : Monotone (TerminatesInTime t l ·) := by
   exact TerminatesFromInTime.mono
