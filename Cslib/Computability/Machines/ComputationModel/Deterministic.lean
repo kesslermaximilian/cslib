@@ -48,12 +48,12 @@ variable {τ : Type*} {α β : Type} [IOComputationModel τ α β] [d : Determin
 
 lemma existsUnique_step (cfg : cfg t l) :
     ∃! cfg', Step cfg cfg' := by
-  by_cases h : Halted cfg
+  by_cases h : Stuck cfg
   · simp [step_of_halt h]
   · simp_rw [step_of_nHalt h]
     apply existsUnique_of_exists_of_unique
-    · simpa [Halted, Cslib.LTS.IsTerminal.iff_UnlabelledTr] using h
-    · simp only [Halted, Cslib.LTS.IsTerminal, not_forall, not_not] at h
+    · simpa [Stuck, Cslib.LTS.IsTerminal.iff_UnlabelledTr] using h
+    · simp only [Stuck, Cslib.LTS.IsTerminal, not_forall, not_not] at h
       grind [DeterministicComputer, d.deterministic t]
 
 
@@ -74,7 +74,7 @@ noncomputable def runFrom (t : τ) (c : cfg t l) (n : ℕ) : IOComputationModel.
 
 /-- The machine eventually halts on `input` with the given `output`. -/
 def Computes {t : τ} (l : α) (l' : Option β) : Prop :=
-  ∃ u, Halted (runFrom t (init t l) u) ∧ output (runFrom t (init t l) u) = l'
+  ∃ u, Stuck (runFrom t (init t l) u) ∧ output (runFrom t (init t l) u) = l'
 
 
 

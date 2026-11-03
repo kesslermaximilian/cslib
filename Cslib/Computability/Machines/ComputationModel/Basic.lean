@@ -82,6 +82,10 @@ class IOComputationModel (τ : Type u) (α β : outParam Type)
   label (t : τ) : Type w
   /-- Resulting LTS of a computer -/
   lts (t : τ) (a : α) : LTS (cfg t a) (label t)
+  /-- Whether a state is considered halted (computation has deliberately stopped). -/
+  Halted (t : τ) {a : α} : cfg t a → Prop
+  /-- Halted states may not have success states, i.e. they are terminal (also called `Stuck`). -/
+  Terminal_of_Halted {t : τ} {a : α} {c : cfg t a} : Halted t c → (lts t a).IsTerminal c
   init (t : τ) (a : α) : cfg t a
   output {t : τ} {a : α} : cfg t a → Option β
 
@@ -89,7 +93,7 @@ class IOComputationModel (τ : Type u) (α β : outParam Type)
 Configurations of (computers of) this `ComputationModel` have a notion of occupied space,
 measured in `ℕ`. -/
 class SpaceSize (τ : Type u) [IOComputationModel τ α β] where
-  space_used {t : τ} {a : α} : IOComputationModel.cfg t a → ℕ
+  spaceUsed {t : τ} {a : α} : List (IOComputationModel.cfg t a) → ℕ
 
 -- Configuration and label universes are independent and occur together in these aliases.
 set_option linter.checkUnivs false in
@@ -118,48 +122,61 @@ variable {τ : Type u} {α β : Type} [IOComputationModel τ α β]
 structure Run (t : τ) (l : α) where
   μs : List (label t)
   ss : List (cfg t l)
-  haltState : (cfg t l)
-  isExecution : LTS.Execution (lts t l) (init t l) μs haltState ss
+  lastState : (cfg t l)
+  isExecution : LTS.Execution (lts t l) (init t l) μs lastState ss
 
-/-- A valid execution sequence that halts. -/
-structure HaltingRun (t : τ) (l : α) extends Run t l where
-  haltState_halts : (lts t l).IsTerminal haltState
+/-- A valid execution sequence that terminates. -/
+structure TerminatingRun (t : τ) (l : α) extends Run t l where
+  lastState_Terminal : (lts t l).IsTerminal lastState
+
+/-- A valid execution sequence that halts (and in particular, terminates). -/
+structure HaltingRun (t : τ) (l : α) extends TerminatingRun t l where
+  lastState_halts : Halted t lastState
+
+/-- Construct a halting run from a run whose last state is halted. -/
+def HaltingRun.of_Run_Halted {t : τ} {l : α} (run : Run t l) (h : Halted t run.lastState) :
+    HaltingRun t l where
+  toRun := run
+  lastState_halts := h
+  lastState_Terminal := Terminal_of_Halted h
 
 /--
 A valid execution sequence that halts within time bound `n`.
 -/
-structure HaltingRunInTime (t : τ) (l : α) (n : ℕ) extends HaltingRun t l where
+structure TerminatingRunInTime (t : τ) (l : α) (n : ℕ) extends TerminatingRun t l where
   lengthBound : μs.length ≤ n
 
 /-- A terminal run whose length and every visited state's space usage respect the bounds. -/
-structure HaltingRunInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ)
-    extends HaltingRunInTime t l n where
-  size_bound : ∀ state ∈ ss, SpaceSize.space_used state ≤ s
+structure TerminatingRunInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ)
+    extends TerminatingRunInTime t l n where
+  spaceBound : SpaceSize.spaceUsed ss ≤ s
 
 end Executions
 
 section Halting
 variable {τ : Type u} [IOComputationModel τ α β]
 
-/-- A configuration is halted if it is terminal in the LTS of its machine. -/
-def Halted {t : τ} {l : α} (c : cfg t l) : Prop :=
+/--
+A configuration is `Stuck` if it is terminal in the LTS of its machine, i.e. there is no
+possilble transition from this state.
+-/
+def Stuck (t : τ) {l : α} (c : cfg t l) : Prop :=
   (lts t l).IsTerminal c
 
 /-- The one-step relation on configurations. A halted configuration steps only to itself. A running
 configuration steps by using any label of the LTS. -/
-def Step {t : τ} {l : α} (c c' : cfg t l) : Prop :=
-  (lts t l).UnlabelledTr c c' ∨ (Halted c ∧ c = c')
+def Step (t : τ) {l : α} (c c' : cfg t l) : Prop :=
+  (lts t l).UnlabelledTr c c' ∨ (Halted t c ∧ c = c')
 
 /-- A halted configuration steps only to itself. -/
-lemma step_of_halt {t : τ} {l : α} {c c' : cfg t l} (h : Halted c) :
-    Step c c' ↔ c' = c := by
-  have := h
-  rw [Halted, LTS.IsTerminal.iff_UnlabelledTr] at this
-  simp [Step, this, h, eq_comm]
+lemma Step_of_Halted {t : τ} {l : α} {c c' : cfg t l} (h : Halted t c) :
+    Step t c c' ↔ c' = c := by
+  have :=  LTS.IsTerminal.iff_UnlabelledTr.mp (Terminal_of_Halted h)
+  simp [Step, h, this, eq_comm]
 
 /-- A non-halted configuration steps using the `UnlabelledTr` of the LTS. -/
-lemma step_of_nHalt {t : τ} {l : α} {c c' : cfg t l} (h : ¬ Halted c) :
-    Step c c' ↔ (lts t l).UnlabelledTr c c' := by
+lemma Step_of_nHalted {t : τ} {l : α} {c c' : cfg t l} (h : ¬ Halted t c) :
+    Step t c c' ↔ (lts t l).UnlabelledTr c c' := by
   simp [Step, h]
 
 end Halting
@@ -167,31 +184,33 @@ namespace NonDeterministic
 variable {τ : Type*} {α β : Type} [IOComputationModel τ α β]
 
 /-- Every execution starting at `a` is finite, for every nondeterministic choice. -/
-def HaltsFrom (t : τ) {l : α} (a : cfg t l) : Prop :=
+def TerminatesFrom (t : τ) {l : α} (a : cfg t l) : Prop :=
   Relation.SN (lts t l).UnlabelledTr a
 
 /-- Every execution prefix starting at `a` contains at most `n` transitions. -/
-def HaltsFromInTime (t : τ) {l : α} (a : cfg t l) (n : ℕ) : Prop :=
+def TerminatesFromInTime (t : τ) {l : α} (a : cfg t l) (n : ℕ) : Prop :=
   ∀ ⦃μs : List (label t)⦄ ⦃b : cfg t l⦄, (lts t l).MTr a μs b → μs.length ≤ n
 
 variable {t : τ} {l : α} {a b : cfg t l} {n : ℕ}
 
 /-- Universal halting is preserved by reachability. -/
-theorem HaltsFrom.of_canReach (h : HaltsFrom t a) (hab : (lts t l).CanReach a b) :
-    HaltsFrom t b :=
+theorem TerminatesFrom.of_canRach (h : TerminatesFrom t a) (hab : (lts t l).CanReach a b) :
+    TerminatesFrom t b :=
   h.of_rel_reflTransGen ((lts t l).reflTransGen_unlabelledTr_iff.mpr hab)
 
 /-- Execution bounds can be increased. -/
-theorem HaltsFromInTime.mono : Monotone (HaltsFromInTime t a ·) :=
+theorem TerminatesFromInTime.mono : Monotone (TerminatesFromInTime t a ·) :=
   fun _ _ hnm h _ _ hex => (h hex).trans hnm
 
 /-- Taking successor state reduces time bound by one. -/
-theorem HaltsFromInTime.succ {a b : (cfg t l)} {μ : (label t)} (h : HaltsFromInTime t a (n + 1))
-    (htr : (lts t l).Tr a μ b) : HaltsFromInTime t b n := by
+theorem TerminatesFromInTime.succ {a b : (cfg t l)} {μ : (label t)}
+    (h : TerminatesFromInTime t a (n + 1)) (htr : (lts t l).Tr a μ b) :
+    TerminatesFromInTime t b n := by
   intro _ _ hmtr
   simpa using h (hmtr.stepL htr)
 
-theorem HaltsFromInTime.haltsFrom (h : HaltsFromInTime t a n) : HaltsFrom t a := by
+theorem TerminatesFromInTime.terminatesFrom (h : TerminatesFromInTime t a n) :
+  TerminatesFrom t a := by
   induction n generalizing a with
   | zero =>
       apply Relation.SN.of_normal
@@ -200,10 +219,10 @@ theorem HaltsFromInTime.haltsFrom (h : HaltsFromInTime t a n) : HaltsFrom t a :=
   | succ n ih =>
       apply Relation.SN.intro
       rintro b ⟨_, htr⟩
-      exact ih (HaltsFromInTime.succ h htr)
+      exact ih (TerminatesFromInTime.succ h htr)
 
 /-- Halting in time zero is the same as being a terminal configuration -/
-theorem haltsFromInTime_zero_iff : HaltsFromInTime t a 0 ↔ (lts t l).IsTerminal a := by
+theorem terminatesFromInTime_zero_iff_Stuck : TerminatesFromInTime t a 0 ↔ Stuck t a := by
   constructor
   · intro h _ _ htr
     simpa using h (LTS.MTr.single _ htr)
@@ -247,24 +266,24 @@ theorem EvalsToInTime.evalsTo (h : EvalsToInTime t a b n) : EvalsTo t a b := h.t
 variable {τ : Type*} {α β : Type} [IOComputationModel τ α β]
 
 
-/-- At least one computation on `l` reaches a terminal configuration. -/
-def MayHalt (t : τ) (l : α) : Prop :=
-  Nonempty (HaltingRun t l)
+/-- At least one computation on `l` reaches a halting configuration. -/
+def MayTerminate (t : τ) (l : α) : Prop :=
+  Nonempty (TerminatingRun t l)
 
-/-- Every computation on `l` terminates. No uniform time bound is asserted. -/
-def Halts (t : τ) (l : α) : Prop :=
-  HaltsFrom t (init t l)
+/-- Every computation on `l` halts. No uniform time bound is asserted. -/
+def Terminates (t : τ) (l : α) : Prop :=
+  TerminatesFrom t (init t l)
 
 /-- Universal halting guarantees that at least one terminal run exists. -/
-theorem Halts.mayHalt {t : τ} {l : α} (h : Halts t l) : MayHalt t l := by
-  obtain ⟨haltState, hr, hnormal⟩ := h.normalizable
+theorem Terminates.mayTerminate {t : τ} {l : α} (h : Terminates t l) : MayTerminate t l := by
+  obtain ⟨lastState, hr, hnormal⟩ := h.normalizable
   obtain ⟨μs, hex⟩ := (lts t l).reflTransGen_unlabelledTr_iff.mp hr
   obtain ⟨ss, hss⟩ := LTS.Execution.of_mTr hex
   exact Nonempty.intro {
     μs := μs
     ss := ss
-    haltState := haltState
-    haltState_halts := by
+    lastState := lastState
+    lastState_Terminal := by
       intro μ c _
       apply hnormal
       use c, μ
@@ -275,55 +294,55 @@ theorem Halts.mayHalt {t : τ} {l : α} (h : Halts t l) : MayHalt t l := by
 Time bounds of `HaltingRunInTime` can be increased.
 -/
 def HaltingRunInTime.mono {t : τ} {n m : ℕ} {l : α} (hnm : n ≤ m)
-    (hv : HaltingRunInTime t l n) : HaltingRunInTime t l m where
+    (hv : TerminatingRunInTime t l n) : TerminatingRunInTime t l m where
   μs := hv.μs
   ss := hv.ss
-  haltState := hv.haltState
-  haltState_halts := hv.haltState_halts
+  lastState := hv.lastState
+  lastState_Terminal := hv.lastState_Terminal
   isExecution := hv.isExecution
   lengthBound := Nat.le_trans hv.lengthBound hnm
 
 /-- At least one computation terminates within `n` transitions. -/
-def MayHaltInTime (t : τ) (l : α) (n : ℕ) : Prop :=
-  Nonempty (HaltingRunInTime t l n)
+def MayTerminateInTime (t : τ) (l : α) (n : ℕ) : Prop :=
+  Nonempty (TerminatingRunInTime t l n)
 
 /-- Every computation on `l` terminates within `n` transitions. -/
-def HaltsInTime (t : τ) (l : α) (n : ℕ) : Prop :=
-  HaltsFromInTime t (init t l) n
+def TerminatesInTime (t : τ) (l : α) (n : ℕ) : Prop :=
+  TerminatesFromInTime t (init t l) n
 
-theorem HaltsInTime.mono {t : τ} {l : α} : Monotone (HaltsInTime t l ·) := by
-  exact HaltsFromInTime.mono
+theorem HaltsInTime.mono {t : τ} {l : α} : Monotone (TerminatesInTime t l ·) := by
+  exact TerminatesFromInTime.mono
 
-/-- A uniform time bound implies universal halting. -/
-theorem HaltsInTime.halts {t : τ} {l : α} {n : ℕ} (h : HaltsInTime t l n) :
-    Halts t l := h.haltsFrom
+/-- A uniform time bound implies universal termination. -/
+theorem TerminatesInTime.terminates {t : τ} {l : α} {n : ℕ} (h : TerminatesInTime t l n) :
+    Terminates t l := h.terminatesFrom
 
 /-- A universally bounded computation has a terminal run within the bound. -/
-theorem HaltsInTime.mayHaltInTime {t : τ} {l : α} {n : ℕ} (h : HaltsInTime t l n) :
-    MayHaltInTime t l n := by
-  obtain ⟨run⟩ := h.halts.mayHalt
+theorem TerminatesInTime.mayTerminateInTime {t : τ} {l : α} {n : ℕ} (h : TerminatesInTime t l n) :
+    MayTerminateInTime t l n := by
+  obtain ⟨run⟩ := h.terminates.mayTerminate
   exact Nonempty.intro {
-    toHaltingRun := run
+    toTerminatingRun := run
     lengthBound := h run.isExecution.to_mTr
   }
 
 /-- All execution prefixes respect both the time and space bounds. -/
-def HaltsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n s : ℕ) : Prop :=
-  HaltsInTime t l n ∧ ∀ ⦃μs : List (label t)⦄ ⦃b : cfg t l⦄ ⦃ss : List (cfg t l)⦄,
-    (lts t l).Execution (init t l) μs b ss → ∀ state ∈ ss, SpaceSize.space_used state ≤ s
+def TerminatesInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n s : ℕ) : Prop :=
+  TerminatesInTime t l n ∧ ∀ ⦃μs : List (label t)⦄ ⦃b : cfg t l⦄ ⦃ss : List (cfg t l)⦄,
+    (lts t l).Execution (init t l) μs b ss → SpaceSize.spaceUsed ss ≤ s
 
-/-- Some terminal computation has the specified output, regardless of other branches. -/
+/-- Some halting computation has the specified output, regardless of other branches. -/
 def MayOutput (t : τ) (l : α) (l' : Option β) : Prop :=
-  ∃ (run : HaltingRun t l), output run.haltState = l'
+  ∃ (run : HaltingRun t l), output run.lastState = l'
 
 /-- Some computation produces the specified output within the time bound. -/
 def MayOutputInTime (t : τ) (l : α) (l' : Option β) (n : ℕ) : Prop :=
-  ∃ (run : HaltingRunInTime t l n), output run.haltState = l'
+  ∃ (run : HaltingRunInTime t l n), output run.lastState = l'
 
 /-- Some computation produces the specified output within the time and space bounds. -/
 def MayOutputInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (l' : Option β)
     (n s : ℕ) : Prop :=
-  ∃ (run : HaltingRunInTimeAndSpace t l n s), output run.haltState = l'
+  ∃ (run : TerminatingRunInTimeAndSpace t l n s), output run.lastState = l'
 
 lemma MayOutputInTime.MayOutput {t : τ} {l : α} {l' : Option β} {n : ℕ} :
     MayOutputInTime t l l' n → MayOutput t l l' := by
@@ -337,21 +356,21 @@ lemma MayOutput.exists_MayOutputInTime {t : τ} {l : α} {l' : Option β} :
 
 /-- All terminal computations agree, without asserting termination of every branch. -/
 def OutputUnique (t : τ) (l : α) : Prop :=
-  ∀ run₁ run₂ : HaltingRun t l, output run₁.haltState = output run₂.haltState
+  ∀ run₁ run₂ : TerminatingRun t l, output run₁.lastState = output run₂.lastState
 
 /-- Every computation terminates, and every terminal computation has output `l'`.
 `none` records agreement on absence of an output; use `some b` for a computed value. -/
 def Outputs (t : τ) (l : α) (l' : Option β) : Prop :=
-  Halts t l ∧ ∀ run : HaltingRun t l, output run.haltState = l'
+  Terminates t l ∧ ∀ run : TerminatingRun t l, output run.lastState = l'
 
 /-- Every computation terminates within the bound and has the specified output. -/
 def OutputsInTime (t : τ) (l : α) (l' : Option β) (n : ℕ) : Prop :=
-  HaltsInTime t l n ∧ ∀ run : HaltingRun t l, output run.haltState = l'
+  TerminatesInTime t l n ∧ ∀ run : TerminatingRun t l, output run.lastState = l'
 
 /-- All computations respect both bounds and agree on their output. -/
 def OutputsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (l' : Option β)
     (n s : ℕ) : Prop :=
-  HaltsInTimeAndSpace t l n s ∧ ∀ run : HaltingRun t l, output run.haltState = l'
+  TerminatesInTimeAndSpace t l n s ∧ ∀ run : TerminatingRun t l, output run.lastState = l'
 
 /-- The output predicate determines at most one result. -/
 theorem Outputs.unique {t : τ} {l : α} {b c : Option β}
@@ -370,13 +389,13 @@ theorem Outputs.outputUnique {t : τ} {l : α} {b : Option β} (h : Outputs t l 
 
 /-- A computation has an output if and only if it halts and output is unique. -/
 theorem exists_outputs_iff {t : τ} {l : α} :
-    (∃ b, Outputs t l b) ↔ Halts t l ∧ OutputUnique t l := by
+    (∃ b, Outputs t l b) ↔ Terminates t l ∧ OutputUnique t l := by
   constructor
   · rintro ⟨b, h⟩
     exact ⟨h.1, h.outputUnique⟩
   · rintro ⟨hhalt, hagree⟩
     obtain ⟨run⟩ := hhalt.mayHalt
-    exact ⟨output run.haltState, hhalt, fun run' => hagree run' run⟩
+    exact ⟨output run.lastState, hhalt, fun run' => hagree run' run⟩
 
 /-- Forgetting a time bound preserves the output. -/
 theorem OutputsInTime.outputs {t : τ} {l : α} {b : Option β} {n : ℕ}
@@ -423,7 +442,7 @@ variable {τ : Type*} {α : Type} [AcceptingCM τ α]
 
 /-- Every branch halts within the bound, and at least one branch accepts. -/
 def AcceptsInTime (t : τ) (l : α) (n : ℕ) : Prop :=
-  HaltsInTime t l n ∧ MayOutput t l (some true)
+  TerminatesInTime t l n ∧ MayOutput t l (some true)
 
 /--
 Every branch respects both bounds, and at least one branch accepts.
@@ -431,7 +450,7 @@ Note that this is _weaker_ than `OutputsInTime t l (some true) n`, since we allo
 that reject or fail as well.
 -/
 def AcceptsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ) : Prop :=
-  HaltsInTimeAndSpace t l n s ∧ MayOutput t l (some true)
+  TerminatesInTimeAndSpace t l n s ∧ MayOutput t l (some true)
 
 /-- Every branch halts within the bound and rejects. -/
 abbrev RejectsInTime (t : τ) (l : α) (n : ℕ) := OutputsInTime t l (some false) n
