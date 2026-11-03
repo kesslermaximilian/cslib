@@ -21,7 +21,7 @@ public import Cslib.Computability.Automata.Acceptors.Acceptor
 
 @[expose] public section
 
-namespace Computation
+namespace Cslib.ComputationModel
 
 /- Means that there is a reasonable notion of "size" on input / output. -/
 class CompSize (Γ : Type) where
@@ -42,4 +42,4 @@ instance : CompSize Unit where
 instance : CompSize Bool where
   compSize _ := 1
 
-end Computation
+end Cslib.ComputationModel

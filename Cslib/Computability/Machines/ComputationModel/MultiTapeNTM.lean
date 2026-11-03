@@ -47,7 +47,6 @@ open Computation.ComputationModel
 open Computation.IOComputationModel
 open Cslib
 
-
 instance : Computation.IOComputationModel (MultiTapeNTM k Symbol State)
   (List Symbol) (List Symbol) where
   cfg _ input := Cfg k Symbol State input
@@ -55,34 +54,28 @@ instance : Computation.IOComputationModel (MultiTapeNTM k Symbol State)
   lts t _ := { Tr c₁ a c₂ := MultiTapeNTM.runningStepUsing t a c₁ c₂ }
   init t l := MultiTapeNTM.initCfg t l
   output c := c.output
+  Halted _ _ c := c.state = none
+  Terminal_of_Halted := by
+    intro ntm l c hc
+    simp [LTS.IsTerminal, MultiTapeNTM.runningStepUsing, hc]
 
+instance : Computation.SpaceSize (MultiTapeNTM k Symbol State) where
+  spaceUsed ss := ∑ i, (Finset.univ.image fun (n : Fin ss.length) ↦ ss[n].workTapePos i).card
+  monotone := by sorry
 
 variable {input : List Symbol} {c c₁ c₂ : Cfg k Symbol State input}
 
 --lemma UnlabelledTr : (lts ntm input).UnlabelledTr = --MultiTapeNTM.runningStepUsing
 
-lemma Halted_correct : Stuck ntm c ↔ Cfg.Halted c := by
-  rw [Stuck, LTS.IsTerminal, lts, Cfg.Halted]
-  constructor
-  · intro h
-    cases c.state with
-    | none => rfl
-    | some q =>
-      exfalso
-      --specialize h (ntm.Tr q c.inputSymbol c.workTapeSymbols )
-
-      sorry
-  · sorry
+lemma Halted_correct : Halted ntm c ↔ Cfg.Halted c := by rfl
 
 lemma Step_correct : Step ntm c₁ c₂ ↔ MultiTapeNTM.Step ntm c₁ c₂ := by
-  --by_cases h : Halted ntm c₁
   simp [Step, LTS.UnlabelledTr, lts, MultiTapeNTM.runningStepUsing, MultiTapeNTM.Step]
-
-  cases c₁.state
+  simp [Halted]
+  cases h : c₁.state
+  · simp [eq_comm]
   · simp
-    sorry
-  · simp
-    sorry
+    rfl
 
 
 end MultiTapeNCM
