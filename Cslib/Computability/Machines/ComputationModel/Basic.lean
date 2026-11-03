@@ -202,6 +202,9 @@ def TerminatesFrom (t : τ) {l : α} (a : cfg t l) : Prop :=
 def TerminatesFromInTime (t : τ) {l : α} (a : cfg t l) (n : ℕ) : Prop :=
   ∀ ⦃μs : List (label t)⦄ ⦃b : cfg t l⦄, (lts t l).MTr a μs b → μs.length ≤ n
 
+def TerminatesFromInTimeAndSpace [SpaceSize τ] (t : τ) {l : α} (a : cfg t l) (n : ℕ) (s : ℕ) :=
+  ∀ ⦃μs b ss⦄, LTS.Execution (lts t l) a μs b ss → μs.length ≤ n ∧ SpaceSize.spaceUsed ss ≤ s
+
 variable {t : τ} {l : α} {a b : cfg t l} {n : ℕ}
 
 /-- Universal halting is preserved by reachability. -/
@@ -231,6 +234,12 @@ theorem TerminatesFromInTime.terminatesFrom (h : TerminatesFromInTime t a n) :
       apply Relation.SN.intro
       rintro b ⟨_, htr⟩
       exact ih (TerminatesFromInTime.succ h htr)
+
+theorem TerminatesFromInTimeAndSpace.terminatesFromIntime [SpaceSize τ] {s : ℕ} :
+    TerminatesFromInTimeAndSpace t a n s  → TerminatesFromInTime t a n := by
+  intro h μs b hmtr
+  obtain ⟨ss, he⟩ := LTS.mTr_iff_execution.mp hmtr
+  exact (h he).1
 
 /-- Halting in time zero is the same as being a terminal configuration -/
 theorem terminatesFromInTime_zero_iff_Stuck : TerminatesFromInTime t a 0 ↔ Stuck t a := by
@@ -289,8 +298,10 @@ def MayHalt (t : τ) (l : α) : Prop :=
   Nonempty (HaltingRun t l)
 
 /-- Every computation on `l` halts. No uniform time bound is asserted. -/
-def Halts (t : τ) (l : α) : Prop :=
-  Terminates t l ∧ sorry
+structure Halts (t : τ) (l : α) : Prop where
+  terminates : Terminates t l
+  notStuck : ∀ (run : TerminatingRun t l), Halted t run.lastState
+
 
 /-- Universal halting guarantees that at least one terminal run exists. -/
 theorem Terminates.mayTerminate {t : τ} {l : α} (h : Terminates t l) : MayTerminate t l := by
@@ -307,6 +318,10 @@ theorem Terminates.mayTerminate {t : τ} {l : α} (h : Terminates t l) : MayTerm
       use c, μ
     isExecution := hss
   }
+
+theorem Halts.mayHalt {t : τ} (l : α) (h : Halts t l) : MayHalt t l := by
+  obtain ⟨run⟩ := h.terminates.mayTerminate
+  exact Nonempty.intro {run with lastState_halts := h.notStuck run}
 
 /--
 Time bounds of `HaltingRunInTime` can be increased.
@@ -327,6 +342,12 @@ def MayTerminateInTime (t : τ) (l : α) (n : ℕ) : Prop :=
 /-- Every computation on `l` terminates within `n` transitions. -/
 def TerminatesInTime (t : τ) (l : α) (n : ℕ) : Prop :=
   TerminatesFromInTime t (init t l) n
+
+/-- Every computation on `l` halts. No uniform time bound is asserted. -/
+def HaltsInTime (t : τ) (l : α) (n : ℕ) : Prop :=
+  ∀ run : Run t l, n ≤ run.μs.length → Halted t run.lastState
+
+--lemma HaltsInTime.terminatesInTime {t : τ} {l : α} {n : ℕ} (h : HaltsInTime )
 
 theorem TerminatesInTime.mono {t : τ} {l : α} : Monotone (TerminatesInTime t l ·) := by
   exact TerminatesFromInTime.mono
@@ -357,165 +378,6 @@ lemma TerminatesInTimeAndSpace.terminatesInTime [SpaceSize τ] {t : τ} {l : α}
   obtain ⟨ss, he⟩ := LTS.mTr_iff_execution.mp hmtr
   exact (h he).1
 
-/-- Some halting computation has the specified output, regardless of other branches. -/
-def MayOutput (t : τ) (l : α) (l' : Option β) : Prop :=
-  ∃ (run : HaltingRun t l), output run.lastState = l'
-
-/-- Some computation produces the specified output within the time bound. -/
-def MayOutputInTime (t : τ) (l : α) (l' : Option β) (n : ℕ) : Prop :=
-  ∃ (run : HaltingRunInTime t l n), output run.lastState = l'
-
-/-- Some computation produces the specified output within the time and space bounds. -/
-def MayOutputInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (l' : Option β)
-    (n s : ℕ) : Prop :=
-  ∃ (run : HaltingRunInTimeAndSpace t l n s), output run.lastState = l'
-
-lemma MayOutputInTime.MayOutput {t : τ} {l : α} {l' : Option β} {n : ℕ} :
-    MayOutputInTime t l l' n → MayOutput t l l' := by
-  rintro ⟨run, h⟩
-  use run.toHaltingRun
-
-lemma MayOutputInTimeAndSpace.MayOutputInTime [SpaceSize τ] {t : τ} {l : α} {l' : Option β} {n : ℕ}
-    {s : ℕ} :
-    MayOutputInTimeAndSpace t l l' n s → MayOutputInTime t l l' n := by
-  rintro ⟨run, h⟩
-  use run.toHaltingRunInTime
-
-lemma MayOutputInTimeAndSpace.MayOutput [SpaceSize τ] {t : τ} {l : α} {l' : Option β} {n : ℕ}
-    {s : ℕ} :
-    MayOutputInTimeAndSpace t l l' n s → MayOutput t l l' := by
-  rintro ⟨run, h⟩
-  use run.toHaltingRun
-
-lemma MayOutput.exists_MayOutputInTime {t : τ} {l : α} {l' : Option β} :
-    MayOutput t l l' → ∃ n, MayOutputInTime t l l' n := by
-  rintro ⟨run, h⟩
-  use run.μs.length, {run with lengthBound := by rfl}
-
-lemma MayOutputInTime.exists_MayOutputInTimeAndSpace [SpaceSize τ] {t : τ} {l : α} {l' : Option β}
-    {n : ℕ} :
-    MayOutputInTime t l l' n → ∃ s, MayOutputInTimeAndSpace t l l' n s := by
-  rintro ⟨run, h⟩
-  use SpaceSize.spaceUsed run.ss, {run with spaceBound := by rfl}
-
-/-- All halting computations agree, without asserting termination of every branch. -/
-def OutputUnique (t : τ) (l : α) : Prop :=
-  ∀ run₁ run₂ : HaltingRun t l, output run₁.lastState = output run₂.lastState
-
-/-- Every computation terminates, and every halting computation has output `l'`.
-`none` records agreement on absence of an output; use `some b` for a computed value. -/
-def Outputs (t : τ) (l : α) (l' : Option β) : Prop :=
-  Terminates t l ∧ ∀ run : HaltingRun t l, output run.lastState = l'
-
-/-- Every computation terminates within the bound and has the specified output. -/
-def OutputsInTime (t : τ) (l : α) (l' : Option β) (n : ℕ) : Prop :=
-  TerminatesInTime t l n ∧ ∀ run : TerminatingRun t l, output run.lastState = l'
-
-/-- All computations respect both bounds and agree on their output. -/
-def OutputsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (l' : Option β)
-    (n s : ℕ) : Prop :=
-  TerminatesInTimeAndSpace t l n s ∧ ∀ run : TerminatingRun t l, output run.lastState = l'
-
-/-- The output predicate determines at most one result. -/
-theorem Outputs.unique {t : τ} {l : α} {b c : Option β}
-    (hb : Outputs t l b) (hc : Outputs t l c) : b = c := by
-  obtain ⟨run⟩ := hb.1.mayTerminate
-  rw [← hb.2 run, hc.2 run]
-
-theorem Outputs.mayOutput {t : τ} {l : α} {b : Option β} (h : Outputs t l b) :
-    MayOutput t l b := by
-  obtain ⟨run⟩ := h.1.mayHalt
-  exact ⟨run, h.2 run⟩
-
-theorem Outputs.outputUnique {t : τ} {l : α} {b : Option β} (h : Outputs t l b) :
-    OutputUnique t l :=
-  fun run₁ run₂ => (h.2 run₁).trans (h.2 run₂).symm
-
-/-- A computation has an output if and only if it halts and output is unique. -/
-theorem exists_outputs_iff {t : τ} {l : α} :
-    (∃ b, Outputs t l b) ↔ Terminates t l ∧ OutputUnique t l := by
-  constructor
-  · rintro ⟨b, h⟩
-    exact ⟨h.1, h.outputUnique⟩
-  · rintro ⟨hhalt, hagree⟩
-    obtain ⟨run⟩ := hhalt.mayHalt
-    exact ⟨output run.lastState, hhalt, fun run' => hagree run' run⟩
-
-/-- Forgetting a time bound preserves the output. -/
-theorem OutputsInTime.outputs {t : τ} {l : α} {b : Option β} {n : ℕ}
-    (h : OutputsInTime t l b n) : Outputs t l b := ⟨h.1.halts, h.2⟩
-
-/-- A universal output within a time bound is attained by a run within that bound. -/
-theorem OutputsInTime.mayOutputInTime {t : τ} {l : α} {b : Option β} {n : ℕ}
-    (h : OutputsInTime t l b n) : MayOutputInTime t l b n := by
-  obtain ⟨run⟩ := h.1.mayHaltInTime
-  exact ⟨run, h.2 run.toHaltingRun⟩
-
-theorem OutputsInTime.mono {t : τ} {l : α} {l' : Option β} : Monotone (OutputsInTime t l l' · )
-    := by
-  intro _ _ hnm h
-  exact ⟨TerminatesInTime.mono hnm h.1, h.2⟩
-
-def ComputesInTime [CompSize α] (t : τ) (f : α → β) (time : ℕ → ℕ) :=
-  ∀ (l : α), OutputsInTime t l (some (f l)) (time (compSize l))
-
-def ComputesInPolyTime [CompSize α] (t : τ) (f : α → β) :=
-  ∃ (P : Polynomial ℕ), ComputesInTime t f P.eval
-
-/--
-"Proof" that `f` is computable by the system `τ`.
-A witness machine is bundled as part of this structure,
-as well as a function bounding execution time.
--/
-structure TimeComputable {Γ Γ' : Type} [CompSize Γ]
-    (τ : Type*) [IOComputationModel τ Γ Γ'] (f : Γ → Γ') where
-  t : τ
-  timeBound : ℕ → ℕ
-  outputsFunInTmie : ∀ w, OutputsInTime t w (f w) (timeBound (compSize w))
-
-structure PolyTimeComputable {Γ Γ' : Type} [CompSize Γ]
-    (τ : Type*) [IOComputationModel τ Γ Γ'] (f : Γ → Γ') extends TimeComputable τ f where
-  poly : Polynomial ℕ
-  bounds (n : ℕ) : timeBound n ≤ poly.eval n
-
-
-section AcceptingCM
-open IOComputationModel
-
-variable {τ : Type*} {α : Type} [AcceptingCM τ α]
-
-/-- Every branch halts within the bound, and at least one branch accepts. -/
-def AcceptsInTime (t : τ) (l : α) (n : ℕ) : Prop :=
-  TerminatesInTime t l n ∧ MayOutput t l (some true)
-
-/--
-Every branch respects both bounds, and at least one branch accepts.
-Note that this is _weaker_ than `OutputsInTime t l (some true) n`, since we allow for computations
-that reject or fail as well.
--/
-def AcceptsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ) : Prop :=
-  TerminatesInTimeAndSpace t l n s ∧ MayOutput t l (some true)
-
-/-- Every branch halts within the bound and rejects. -/
-abbrev RejectsInTime (t : τ) (l : α) (n : ℕ) := OutputsInTime t l (some false) n
-
-/-- Every branch respects both bounds and rejects. -/
-abbrev RejectsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n : ℕ) (s : ℕ) :=
-  OutputsInTimeAndSpace t l (some false) n s
-
-theorem AcceptsInTime.mono {t : τ} {l : α} : Monotone (AcceptsInTime t l · ) :=
-  fun _ _ hnm h => ⟨TerminatesInTime.mono hnm h.1, h.2⟩
-
-theorem RejectsInTime.mono {t : τ} {l : α} : Monotone (RejectsInTime t l · ) :=
-  OutputsInTime.mono
-
-/-- Universal rejection excludes an accepting branch. -/
-theorem RejectsInTime.not_acceptsInTime {t : τ} {l : α} {n m : ℕ}
-    (h : RejectsInTime t l n) : ¬ AcceptsInTime t l m := by
-  rintro ⟨_, run, hout⟩
-  simp [h.2 run] at hout
-
-end AcceptingCM
 
 end NonDeterministic
 
