@@ -26,21 +26,21 @@ their equivalences.
 
 @[expose] public section
 
-namespace Computation.ComputationModel
+namespace Cslib.ComputationModel
 open IOComputationModel
 
 /--
-A computer is deterministic if for every given state, there is at least one reachable state.
-Note that this is different than `(lts t).Deterministic`, since we require a unique reachable state
-regardless of label.
+A computer is deterministic if for every given state, there is at most one possible transition.
+Additionally, we require that there is no stuck states, i.e. every non-halted state has a
+transition.
 -/
-def DeterministicComputer {τ : Type u} {α β : Type} [IOComputationModel τ α β] (t : τ) :=
-  ∀ ⦃l⦄ ⦃a b b': cfg t l⦄, (lts t l).UnlabelledTr a b → (lts t l).UnlabelledTr a b' → b = b'
+class DeterministicComputer {τ : Type u} {α β : Type} [IOComputationModel τ α β] (t : τ) where
+  unique ⦃l a b b'⦄ : (lts t l).UnlabelledTr a b → (lts t l).UnlabelledTr a b' → b = b'
+  exits_of_nHalted ⦃l a⦄: ¬ Halted t a → ∃ b, (lts t l).UnlabelledTr a b
 
 /-- A computaton model is deterministic if all its computers are deterministic. -/
 class DeterministicCM (τ : Type u) {α β : Type} [IOComputationModel τ α β] where
   deterministic (t : τ) : DeterministicComputer t
-
 
 namespace Deterministic
 
@@ -48,13 +48,12 @@ variable {τ : Type*} {α β : Type} [IOComputationModel τ α β] [d : Determin
 
 lemma existsUnique_step (cfg : cfg t l) :
     ∃! cfg', Step t cfg cfg' := by
-  by_cases h : Stuck t cfg
-  · simp [step_of_Halt h]
-  · simp_rw [step_of_nHalt h]
+  by_cases h : Halted t cfg
+  · simp [Step_of_Halted h]
+  · simp_rw [Step_of_nHalted h]
     apply existsUnique_of_exists_of_unique
-    · simpa [Stuck, Cslib.LTS.IsTerminal.iff_UnlabelledTr] using h
-    · simp only [Stuck, Cslib.LTS.IsTerminal, not_forall, not_not] at h
-      grind [DeterministicComputer, d.deterministic t]
+    · exact (d.deterministic t).exits_of_nHalted h
+    · apply (d.deterministic t).unique
 
 
 /-- The unique successor configuration related to `cfg` by the inherited step relation. -/
@@ -63,7 +62,7 @@ noncomputable def step {t : τ} (c : cfg t l) : cfg t l :=
 
 /-- `Step` relates `c` to `c'` exactly when `step c = c'`. -/
 @[simp, scoped grind =]
-lemma step_iff {c c' : cfg t l} : Step c c' ↔ step c = c' := by
+lemma step_iff {c c' : cfg t l} : Step t c c' ↔ step c = c' := by
   unfold step
   exact (ExistsUnique.choose_eq_iff _).symm
 
@@ -74,11 +73,11 @@ noncomputable def runFrom (t : τ) (c : cfg t l) (n : ℕ) : IOComputationModel.
 
 /-- The machine eventually halts on `input` with the given `output`. -/
 def Computes {t : τ} (l : α) (l' : Option β) : Prop :=
-  ∃ u, Stuck (runFrom t (init t l) u) ∧ output (runFrom t (init t l) u) = l'
+  ∃ u, Halted t (runFrom t (init t l) u) ∧ output (runFrom t (init t l) u) = l'
 
 
 
 end Deterministic
 
 
-end Computation.ComputationModel
+end Cslib.ComputationModel

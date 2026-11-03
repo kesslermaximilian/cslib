@@ -8,6 +8,7 @@ module
 
 public import Cslib.Computability.Automata.Acceptors.Acceptor
 public import Cslib.Computability.Machines.ComputationModel.Basic
+public import Cslib.Computability.Machines.ComputationModel.NonDeterministic
 
 /-!
 
@@ -19,12 +20,12 @@ Typeclass synthesis to allow viewing an `AcceptingCM`
 
 @[expose] public section
 
-namespace Computation
+namespace Cslib.ComputationModel
 
 /-- An accepting system with word inputs is an automata acceptor. -/
 instance {τ : Type*} {Γ : Type} [AcceptingCM τ (List Γ)] :
     Cslib.Automata.Acceptor τ Γ where
-  Accepts t l := IOComputationModel.Outputs t l (some true)
+  Accepts t l := ComputationModel.Accepts t l
 
 
-end Computation
+end Cslib.ComputationModel

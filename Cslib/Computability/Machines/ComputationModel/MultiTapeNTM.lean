@@ -42,12 +42,11 @@ end MultiTapeNTM
 
 namespace MultiTapeNCM
 
-open Computation
-open Computation.ComputationModel
-open Computation.IOComputationModel
+open Cslib.ComputationModel
+open Cslib.IOComputationModel
 open Cslib
 
-instance : Computation.IOComputationModel (MultiTapeNTM k Symbol State)
+instance : Cslib.IOComputationModel (MultiTapeNTM k Symbol State)
   (List Symbol) (List Symbol) where
   cfg _ input := Cfg k Symbol State input
   label _ := Action k Symbol State
@@ -59,7 +58,7 @@ instance : Computation.IOComputationModel (MultiTapeNTM k Symbol State)
     intro ntm l c hc
     simp [LTS.IsTerminal, MultiTapeNTM.runningStepUsing, hc]
 
-instance : Computation.SpaceSize (MultiTapeNTM k Symbol State) where
+instance : Cslib.SpaceSize (MultiTapeNTM k Symbol State) where
   spaceUsed ss := ∑ i, (Finset.univ.image fun (n : Fin ss.length) ↦ ss[n].workTapePos i).card
   monotone := by sorry
 

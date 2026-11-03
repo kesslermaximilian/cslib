@@ -194,7 +194,7 @@ structure HaltingRunInTimeAndSpace
 abbrev Computation := Run t l (init t l)
 abbrev TerminatingComputation := TerminatingRun t l (init t l)
 abbrev HaltingComputation := HaltingRun t l (init t l)
-abbrev ComputationInTime := RunInTime t l (init t l)
+abbrev ComputationInTime := RunInTime t l (init t l) n
 abbrev TerminatingComputationInTime := TerminatingRunInTime t l (init t l) n
 abbrev HaltingComputationInTime := HaltingRunInTime t l (init t l) n
 abbrev ComputationInTimeAndSpace := RunInTimeAndSpace t l (init t l) n s
@@ -403,13 +403,13 @@ structure HaltsFromInTimeAndSpace [SpaceSize τ] (t : τ) {l : α} (c : cfg t l)
   terminates : TerminatesFromInTimeAndSpace t c n s
   notStuck : ∀ (run : TerminatingRun t l c), Halted t run.lastState
 
-abbrev Halts (t : τ) {l : α} : Prop
+abbrev Halts (t : τ) (l : α) : Prop
   := HaltsFrom t (init t l)
 
-abbrev HaltsInTime (t : τ) {l : α} (n : ℕ) : Prop
+abbrev HaltsInTime (t : τ) (l : α) (n : ℕ) : Prop
   := HaltsFromInTime t (init t l) n
 
-abbrev HaltsInTimeAndSpace [SpaceSize τ] (t : τ) {l : α} (n s : ℕ) : Prop
+abbrev HaltsInTimeAndSpace [SpaceSize τ] (t : τ) (l : α) (n s : ℕ) : Prop
   := HaltsFromInTimeAndSpace t (init t l) n s
 
 theorem HaltsFromInTime.haltsFrom {t : τ} {l : α} {c : cfg t l} {n : ℕ}
