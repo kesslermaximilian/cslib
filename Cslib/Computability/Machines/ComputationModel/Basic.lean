@@ -83,7 +83,7 @@ class IOComputationModel (τ : Type u) (α β : outParam Type)
   /-- Whether a state is considered halted (computation has deliberately stopped). -/
   Halted (t : τ) {a : α} : cfg t a → Prop
   /-- Halted states may not have success states, i.e. they are terminal (also called `Stuck`). -/
-  Terminal_of_Halted {t : τ} {a : α} {c : cfg t a} : Halted t c → (lts t a).IsTerminal c
+  _Terminal_of_Halted {t : τ} {a : α} {c : cfg t a} : Halted t c → (lts t a).IsTerminal c
   init (t : τ) (a : α) : cfg t a
   output {t : τ} {a : α} : cfg t a → Option β
 
@@ -118,25 +118,33 @@ variable {τ : Type u} {α β : Type} [IOComputationModel τ α β]
 section Step
 
 /--
-A configuration is `Stuck` if it is terminal in the LTS of its machine, i.e. there is no
-possilble transition from this state.
+A configuration is `Terminal` if it is terminal in the LTS of its machine, i.e. there is no
+possible transition from this state.
 -/
-def Stuck (t : τ) {l : α} (c : cfg t l) : Prop :=
+def Terminal (t : τ) {l : α} (c : cfg t l) : Prop :=
   (lts t l).IsTerminal c
 
-/-- The one-step relation on configurations. A halted configuration steps only to itself. A running
-configuration steps by using any label of the LTS. -/
+lemma Terminal_of_Halted {t : τ} {a : α} {c : cfg t a} : Halted t c → Terminal t c :=
+  _Terminal_of_Halted
+
+
+/-- A state is stuck if it is terminal but not halted -/
+def Stuck (t : τ) {l : α} (c : cfg t l) : Prop :=
+  Terminal t c ∧ ¬ Halted t c
+
+/-- The one-step relation on configurations. A terminal configuration steps only to itself.
+A running configuration steps by using any label of the LTS. -/
 def Step (t : τ) {l : α} (c c' : cfg t l) : Prop :=
-  (lts t l).UnlabelledTr c c' ∨ (Halted t c ∧ c = c')
+  (lts t l).UnlabelledTr c c' ∨ (Terminal t c ∧ c = c')
 
 /-- A halted configuration steps only to itself. -/
-lemma Step_of_Halted {t : τ} {l : α} {c c' : cfg t l} (h : Halted t c) :
+lemma Step_of_Terminal {t : τ} {l : α} {c c' : cfg t l} (h : Terminal t c) :
     Step t c c' ↔ c' = c := by
-  have :=  LTS.IsTerminal.iff_UnlabelledTr.mp (Terminal_of_Halted h)
+  have :=  LTS.IsTerminal.iff_UnlabelledTr.mp h
   simp [Step, h, this, eq_comm]
 
 /-- A non-halted configuration steps using the `UnlabelledTr` of the LTS. -/
-lemma Step_of_nHalted {t : τ} {l : α} {c c' : cfg t l} (h : ¬ Halted t c) :
+lemma Step_of_nTerminal {t : τ} {l : α} {c c' : cfg t l} (h : ¬ Terminal t c) :
     Step t c c' ↔ (lts t l).UnlabelledTr c c' := by
   simp [Step, h]
 
@@ -308,7 +316,7 @@ theorem TerminatesFromInTimeAndSpace.terminatesFromIntime [SpaceSize τ] {s : �
   exact (h he).1
 
 /-- Halting in time zero is the same as being a terminal configuration -/
-theorem terminatesFromInTime_zero_iff_Stuck : TerminatesFromInTime t a 0 ↔ Stuck t a := by
+theorem terminatesFromInTime_zero_iff_Stuck : TerminatesFromInTime t a 0 ↔ Terminal t a := by
   constructor
   · intro h _ _ htr
     simpa using h (LTS.MTr.single _ htr)
