@@ -42,20 +42,21 @@ class DeterministicCM (τ : Type u) {α β : Type} [IOComputationModel τ α β]
 instance {τ : Type u} {α β : Type} [IOComputationModel τ α β] [DeterministicCM τ] (t : τ) :
     DeterministicComputer t := DeterministicCM.deterministic t
 
-namespace Deterministic
+-- Lemmata that will apply to computation models that are both deterministic and never stuck
+section DeterministicProgress
 
 variable {τ : Type*} {α β : Type} [IOComputationModel τ α β] {t : τ} {l : α}
-variable [DeterministicComputer t]
+variable [DeterministicComputer t] [ProgressComputer t]
 
 lemma existsUnique_step (cfg : cfg t l) :
     ∃! cfg', Step t cfg cfg' := by
-  by_cases h : Terminal t cfg
-  · simp [Step_of_Terminal h]
-  · simp_rw [Step_of_nTerminal h]
+  by_cases h : Halted t cfg
+  · simp [Step_of_Halted h]
+  · simp_rw [Step_of_nHalted h]
     apply existsUnique_of_exists_of_unique
-    · simpa [Terminal, LTS.IsTerminal.iff_UnlabelledTr] using h
+    · rw [Halted_iff_Terminal, Terminal, LTS.IsTerminal.iff_UnlabelledTr] at h
+      grind
     · apply DeterministicComputer.unique
-
 
 /-- The unique successor configuration related to `cfg` by the inherited step relation. -/
 noncomputable def step (c : cfg t l) : cfg t l :=
@@ -79,7 +80,7 @@ def Computes (l : α) (l' : Option β) : Prop :=
 
 
 
-end Deterministic
+end DeterministicProgress
 
 
 end Cslib.ComputationModel

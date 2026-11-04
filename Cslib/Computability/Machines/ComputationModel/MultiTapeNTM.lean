@@ -17,6 +17,7 @@ public import Cslib.Computability.Machines.Turing.MultiTape.Nondeterministic
 
 -/
 
+@[expose] public section
 
 namespace Turing
 
@@ -54,7 +55,7 @@ instance : Cslib.IOComputationModel (MultiTapeNTM k Symbol State)
   init t l := MultiTapeNTM.initCfg t l
   output c := c.output
   Halted _ _ c := c.state = none
-  Terminal_of_Halted := by
+  _Terminal_of_Halted := by
     intro ntm l c hc
     simp [LTS.IsTerminal, MultiTapeNTM.runningStepUsing, hc]
 
@@ -64,16 +65,14 @@ instance : Cslib.SpaceSize (MultiTapeNTM k Symbol State) where
 
 variable {input : List Symbol} {c c₁ c₂ : Cfg k Symbol State input}
 
---lemma UnlabelledTr : (lts ntm input).UnlabelledTr = --MultiTapeNTM.runningStepUsing
-
+@[simp]
 lemma Halted_correct : Halted ntm c ↔ Cfg.Halted c := by rfl
 
 lemma Step_correct : Step ntm c₁ c₂ ↔ MultiTapeNTM.Step ntm c₁ c₂ := by
   simp [Step, LTS.UnlabelledTr, lts, MultiTapeNTM.runningStepUsing, MultiTapeNTM.Step]
-  simp [Halted]
   cases h : c₁.state
-  · simp [eq_comm]
-  · simp
+  · simp [Cfg.Halted, h, eq_comm]
+  · simp [Cfg.Halted, h]
     rfl
 
 

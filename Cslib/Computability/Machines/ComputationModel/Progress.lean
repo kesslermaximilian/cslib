@@ -44,7 +44,7 @@ class ProgressCM (τ : Type u) {α β : Type} [IOComputationModel τ α β] wher
 instance (τ : Type u) {α β : Type} [IOComputationModel τ α β] [ProgressCM τ] (t : τ) :
     ProgressComputer t := ProgressCM.progress t
 
-namespace IOComputationModel
+--namespace IOComputationModel
 
 variable {τ : Type*} {α β : Type} [IOComputationModel τ α β]
 variable {t : τ} {l : α} {c : cfg t l} [ProgressComputer t]
@@ -71,7 +71,7 @@ theorem TerminatesFrom_iff_HaltsFrom (h : TerminatesFrom t c) : HaltsFrom t c wh
 
 -- TODO: Prove similar simp lemmas about the other predicates involing "Terminates"
 
-end IOComputationModel
+--end IOComputationModel
 
 
 

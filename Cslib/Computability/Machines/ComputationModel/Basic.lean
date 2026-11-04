@@ -132,19 +132,19 @@ lemma Terminal_of_Halted {t : τ} {a : α} {c : cfg t a} : Halted t c → Termin
 def Stuck (t : τ) {l : α} (c : cfg t l) : Prop :=
   Terminal t c ∧ ¬ Halted t c
 
-/-- The one-step relation on configurations. A terminal configuration steps only to itself.
+/-- The one-step relation on configurations. A halted configuration steps only to itself.
 A running configuration steps by using any label of the LTS. -/
 def Step (t : τ) {l : α} (c c' : cfg t l) : Prop :=
-  (lts t l).UnlabelledTr c c' ∨ (Terminal t c ∧ c = c')
+  (lts t l).UnlabelledTr c c' ∨ (Halted t c ∧ c = c')
 
 /-- A halted configuration steps only to itself. -/
-lemma Step_of_Terminal {t : τ} {l : α} {c c' : cfg t l} (h : Terminal t c) :
+lemma Step_of_Halted {t : τ} {l : α} {c c' : cfg t l} (h : Halted t c) :
     Step t c c' ↔ c' = c := by
-  have :=  LTS.IsTerminal.iff_UnlabelledTr.mp h
+  have :=  LTS.IsTerminal.iff_UnlabelledTr.mp (Terminal_of_Halted h)
   simp [Step, h, this, eq_comm]
 
 /-- A non-halted configuration steps using the `UnlabelledTr` of the LTS. -/
-lemma Step_of_nTerminal {t : τ} {l : α} {c c' : cfg t l} (h : ¬ Terminal t c) :
+lemma Step_of_nHalted {t : τ} {l : α} {c c' : cfg t l} (h : ¬ Halted t c) :
     Step t c c' ↔ (lts t l).UnlabelledTr c c' := by
   simp [Step, h]
 
