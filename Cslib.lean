@@ -97,6 +97,14 @@ public import Cslib.Computability.Languages.RegularLanguage
 public import Cslib.Computability.Languages.SafetyLiveness
 public import Cslib.Computability.Languages.Slice
 public import Cslib.Computability.Languages.SyntacticMonoid
+public import Cslib.Computability.Machines.ComputationModel.Acceptor
+public import Cslib.Computability.Machines.ComputationModel.Basic
+public import Cslib.Computability.Machines.ComputationModel.CompSize
+public import Cslib.Computability.Machines.ComputationModel.Deterministic
+public import Cslib.Computability.Machines.ComputationModel.MultiTapeNTM
+public import Cslib.Computability.Machines.ComputationModel.NonDeterministic
+public import Cslib.Computability.Machines.ComputationModel.Progress
+public import Cslib.Computability.Machines.ComputationModel.Wrappers
 public import Cslib.Computability.Machines.Turing.MultiTape.Combinators.AlmostConstant
 public import Cslib.Computability.Machines.Turing.MultiTape.Combinators.Id
 public import Cslib.Computability.Machines.Turing.MultiTape.ConfigBound
@@ -157,6 +165,7 @@ public import Cslib.Foundations.Data.FinFun.Basic
 public import Cslib.Foundations.Data.FinFun.Update
 public import Cslib.Foundations.Data.Finset.Involution
 public import Cslib.Foundations.Data.HasFresh
+public import Cslib.Foundations.Data.List.Combine
 public import Cslib.Foundations.Data.List.IsChainFromTo
 public import Cslib.Foundations.Data.Nat.Asymptotics
 public import Cslib.Foundations.Data.Nat.Factorial
