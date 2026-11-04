@@ -68,7 +68,7 @@ instance WithIOEncoding.instIOComputationModel {α' α β β' : Type}
   cfg t input := cfg t.t (fin input)
   lts t input := lts t.t (fin input)
   Halted t := Halted t.t
-  Terminal_of_Halted {t} _ _ h := Terminal_of_Halted (t := t.t) h
+  _Terminal_of_Halted {t} _ _ h := Terminal_of_Halted (t := t.t) h
   init t input := init t.t (fin input)
   output := fout ∘ IOComputationModel.output
 

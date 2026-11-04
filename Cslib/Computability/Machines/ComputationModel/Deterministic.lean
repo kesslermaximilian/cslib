@@ -45,8 +45,12 @@ instance {τ : Type u} {α β : Type} [IOComputationModel τ α β] [Determinist
 -- Lemmata that will apply to computation models that are both deterministic and never stuck
 section DeterministicProgress
 
-variable {τ : Type*} {α β : Type} [IOComputationModel τ α β] {t : τ} {l : α}
+variable {τ : Type*} {α β : Type} [IOComputationModel τ α β] (t : τ) {l : α}
 variable [DeterministicComputer t] [ProgressComputer t]
+
+
+--noncomputable def tr
+
 
 lemma existsUnique_step (cfg : cfg t l) :
     ∃! cfg', Step t cfg cfg' := by
@@ -60,19 +64,26 @@ lemma existsUnique_step (cfg : cfg t l) :
 
 /-- The unique successor configuration related to `cfg` by the inherited step relation. -/
 noncomputable def step (c : cfg t l) : cfg t l :=
-  (existsUnique_step c).choose
+  (existsUnique_step t c).choose
 
+variable {t} in
 /-- `Step` relates `c` to `c'` exactly when `step c = c'`. -/
 @[simp, scoped grind =]
-lemma step_iff {c c' : cfg t l} : Step t c c' ↔ step c = c' := by
+lemma step_iff {c c' : cfg t l} : Step t c c' ↔ step t c = c' := by
   unfold step
   exact (ExistsUnique.choose_eq_iff _).symm
 
-variable (t) in
+
+@[simp]
+lemma step_of_halt {c : cfg t l} (h : Halted t c) :
+    step t c = c := by
+  apply step_iff.mp
+  rw [Step_of_Halted h]
+
 /-- The configuration reached by running the machine for `n` steps from `c`.
 If the machine halts, it will stay at the halting configuration. -/
 noncomputable def runFrom (c : cfg t l) (n : ℕ) : IOComputationModel.cfg t l :=
-  step^[n] c
+  (step t)^[n] c
 
 /-- The machine eventually halts on `input` with the given `output`. -/
 def Computes (l : α) (l' : Option β) : Prop :=

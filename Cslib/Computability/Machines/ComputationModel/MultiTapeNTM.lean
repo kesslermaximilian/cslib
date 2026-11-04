@@ -21,7 +21,7 @@ public import Cslib.Computability.Machines.Turing.MultiTape.Nondeterministic
 
 namespace Turing
 
-variable {State : Type*} {Symbol : Type} {k : ℕ} (ntm : MultiTapeNTM k Symbol State)
+variable {State : Type*} {Symbol : Type} {k n : ℕ} (ntm : MultiTapeNTM k Symbol State)
 
 namespace MultiTapeNTM
 
@@ -69,12 +69,22 @@ variable {input : List Symbol} {c c₁ c₂ : Cfg k Symbol State input}
 lemma Halted_correct : Halted ntm c ↔ Cfg.Halted c := by rfl
 
 lemma Step_correct : Step ntm c₁ c₂ ↔ MultiTapeNTM.Step ntm c₁ c₂ := by
-  simp [Step, LTS.UnlabelledTr, lts, MultiTapeNTM.runningStepUsing, MultiTapeNTM.Step]
+  simp [Step, runStep, LTS.UnlabelledTr, lts, MultiTapeNTM.runningStepUsing, MultiTapeNTM.Step]
   cases h : c₁.state
-  · simp [Cfg.Halted, h, eq_comm]
+  · simp [Cfg.Halted, h, eq_comm,]
   · simp [Cfg.Halted, h]
     rfl
 
+-- TODO: To connect these, we need to relate the
+-- `RunPath` and `HaltingRunInTime` structures more,
+-- in particular how adding the loops makes them slightly different.
+-- This is, however, equivalent
+lemma RunsInTime_correct : ntm.RunsInTime input n ↔ HaltsInTime ntm input n := by
+  constructor
+  · intro h
+
+    sorry
+  · sorry
 
 end MultiTapeNCM
 end Turing

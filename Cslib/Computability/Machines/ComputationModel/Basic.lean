@@ -7,6 +7,8 @@ Authors: Maximilian Keßler
 module
 
 public import Mathlib.Algebra.Polynomial.Eval.Defs
+public import Mathlib.Order.RelSeries
+public import Mathlib.Basic.Rel
 public import Cslib.Foundations.Relation.RelatesInSteps
 public import Cslib.Foundations.Semantics.LTS.Relation
 public import Cslib.Foundations.Semantics.LTS.Execution
@@ -124,34 +126,72 @@ possible transition from this state.
 def Terminal (t : τ) {l : α} (c : cfg t l) : Prop :=
   (lts t l).IsTerminal c
 
+lemma Terminal_iff {t : τ} {l : α} {c : cfg t l} :
+    Terminal t c ↔ ∀ c', ¬ (lts t l).UnlabelledTr c c' := by
+  simp [Terminal, LTS.IsTerminal.iff_UnlabelledTr]
+
+alias ⟨Terminal.not_UnlabelledTr, Terminal.of_not_UnlabelledTr⟩
+  := Terminal_iff
+
 lemma Terminal_of_Halted {t : τ} {a : α} {c : cfg t a} : Halted t c → Terminal t c :=
   _Terminal_of_Halted
-
 
 /-- A state is stuck if it is terminal but not halted -/
 def Stuck (t : τ) {l : α} (c : cfg t l) : Prop :=
   Terminal t c ∧ ¬ Halted t c
 
+/-- The unlabelled version of the LTS, as a relation on configurations. -/
+def runStep (t : τ) {l : α} (c c' : cfg t l) : Prop :=
+  (lts t l).UnlabelledTr c c'
+
 /-- The one-step relation on configurations. A halted configuration steps only to itself.
 A running configuration steps by using any label of the LTS. -/
 def Step (t : τ) {l : α} (c c' : cfg t l) : Prop :=
-  (lts t l).UnlabelledTr c c' ∨ (Halted t c ∧ c = c')
+  runStep t c c' ∨ (Halted t c ∧ c = c')
 
 /-- A halted configuration steps only to itself. -/
 lemma Step_of_Halted {t : τ} {l : α} {c c' : cfg t l} (h : Halted t c) :
     Step t c c' ↔ c' = c := by
-  have :=  LTS.IsTerminal.iff_UnlabelledTr.mp (Terminal_of_Halted h)
-  simp [Step, h, this, eq_comm]
+  simp [Step, h, eq_comm, runStep, (Terminal_of_Halted h).not_UnlabelledTr]
 
 /-- A non-halted configuration steps using the `UnlabelledTr` of the LTS. -/
 lemma Step_of_nHalted {t : τ} {l : α} {c c' : cfg t l} (h : ¬ Halted t c) :
     Step t c c' ↔ (lts t l).UnlabelledTr c c' := by
-  simp [Step, h]
+  simp [Step, h, runStep]
+
+/-- The one-step relation on configurations for `input`, as a set of pairs. -/
+abbrev stepRel (t : τ) (l : α) : SetRel (cfg t l) (cfg t l) :=
+  {(c, c') | Step t c c'}
+
+/-- The one-step relation on configurations for `input`, as a set of pairs. -/
+abbrev runningStepRel (t : τ) (l : α) : SetRel (cfg t l) (cfg t l) :=
+  {(c, c') | ¬ Halted t c ∧ Step t c c'}
+
+-- TODO: This is maybe the more "canonical" definition in the abstract framework?
+/-- The one-step relation on configurations for `input`, as a set of pairs. -/
+abbrev runningStepRel' (t : τ) (l : α) : SetRel (cfg t l) (cfg t l) :=
+  {(c, c') | (lts t l).UnlabelledTr c c'}
+
+example (t : τ) (l : α) :
+    runningStepRel t l = runningStepRel' t l := by
+  rw [runningStepRel, runningStepRel']
+  simp only [Step, Set.ofPred.injEq]
+  funext x
+  rw [eq_iff_iff]
+  constructor
+  · grind [runStep]
+  · intro h
+    simp only [runStep, h, true_or, and_true]
+    intro hh
+    exact (Terminal_of_Halted hh).not_UnlabelledTr _ h
 
 end Step
 
 section Runs
 variable (t : τ) (l : α) (c : cfg t l) (n s : ℕ)
+
+/-- A nonempty list of configurations joined by steps of `t`. -/
+abbrev RunPath (t : τ) (l : α) := RelSeries (stepRel t l)
 
 /-- A valid execution sequence in the configuraiton space of this machine with input `l`. -/
 structure Run where
