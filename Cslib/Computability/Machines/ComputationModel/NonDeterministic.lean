@@ -23,7 +23,7 @@ public import Cslib.Computability.Machines.ComputationModel.Basic
 
 namespace Cslib.ComputationModel
 open IOComputationModel
-variable {τ : Type*} {α β : Type} [IOComputationModel τ α β]
+variable {τ : Type*} {α β : Type*} [IOComputationModel τ α β]
 
 /-- Some halting computation has the specified output, regardless of other branches. -/
 def MayOutput (t : τ) (l : α) (l' : Option β) : Prop :=
@@ -141,13 +141,13 @@ def ComputesInPolyTime [CompSize α] (t : τ) (f : α → β) :=
 A witness machine is bundled as part of this structure,
 as well as a function bounding execution time.
 -/
-structure TimeComputable {Γ Γ' : Type} [CompSize Γ]
+structure TimeComputable {Γ Γ' : Type*} [CompSize Γ]
     (τ : Type*) [IOComputationModel τ Γ Γ'] (f : Γ → Γ') where
   t : τ
   timeBound : ℕ → ℕ
   outputsFunInTmie : ∀ w, OutputsInTime t w (f w) (timeBound (compSize w))
 
-structure PolyTimeComputable {Γ Γ' : Type} [CompSize Γ]
+structure PolyTimeComputable {Γ Γ' : Type*} [CompSize Γ]
     (τ : Type*) [IOComputationModel τ Γ Γ'] (f : Γ → Γ') extends TimeComputable τ f where
   poly : Polynomial ℕ
   bounds (n : ℕ) : timeBound n ≤ poly.eval n
@@ -156,7 +156,7 @@ structure PolyTimeComputable {Γ Γ' : Type} [CompSize Γ]
 section AcceptingCM
 open IOComputationModel
 
-variable {τ : Type*} {α : Type} [AcceptingCM τ α]
+variable {τ : Type*} {α : Type*} [AcceptingCM τ α]
 
 def Accepts (t : τ) (l : α) : Prop :=
   Terminates t l ∧ MayOutput t l (some true)

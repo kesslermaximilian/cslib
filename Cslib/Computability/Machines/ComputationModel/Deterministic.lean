@@ -32,20 +32,20 @@ open Cslib.IOComputationModel
 /--
 A computer is deterministic if for every given state, there is at most one possible transition.
 -/
-class DeterministicComputer {τ : Type u} {α β : Type} [IOComputationModel τ α β] (t : τ) where
+class DeterministicComputer {τ : Type u} {α β : Type*} [IOComputationModel τ α β] (t : τ) where
   unique ⦃l a b b'⦄ : (lts t l).UnlabelledTr a b → (lts t l).UnlabelledTr a b' → b = b'
 
 /-- A computaton model is deterministic if all its computers are deterministic. -/
-class DeterministicCM (τ : Type u) {α β : Type} [IOComputationModel τ α β] where
+class DeterministicCM (τ : Type u) {α β : Type*} [IOComputationModel τ α β] where
   deterministic (t : τ) : DeterministicComputer t
 
-instance {τ : Type u} {α β : Type} [IOComputationModel τ α β] [DeterministicCM τ] (t : τ) :
+instance {τ : Type u} {α β : Type*} [IOComputationModel τ α β] [DeterministicCM τ] (t : τ) :
     DeterministicComputer t := DeterministicCM.deterministic t
 
 -- Lemmata that will apply to computation models that are both deterministic and never stuck
 section DeterministicProgress
 
-variable {τ : Type*} {α β : Type} [IOComputationModel τ α β] (t : τ) {l : α}
+variable {τ : Type*} {α β : Type*} [IOComputationModel τ α β] (t : τ) {l : α}
 variable [DeterministicComputer t] [ProgressComputer t]
 
 

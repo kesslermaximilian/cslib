@@ -57,11 +57,11 @@ def DenoteAcceptance.toBool {Γ : Type*} [DenoteAcceptance Γ] (t : Γ) : Option
 View the computation model `τ` on `α` and `β` as operating on `α'` and `β'` instead,
 by providing precomposition (and postcomposition) functions to (from) `α` (and `β`).
 -/
-structure WithIOEncoding {α β : Type} (τ : Type*) [IOComputationModel τ α β]
-    (α' β' : Type) (enc_in : α' → α) (enc_out : Option β → Option β') where
+structure WithIOEncoding {α β : Type*} (τ : Type*) [IOComputationModel τ α β]
+    (α' β' : Type*) (enc_in : α' → α) (enc_out : Option β → Option β') where
   t : τ
 
-instance WithIOEncoding.instIOComputationModel {α' α β β' : Type}
+instance WithIOEncoding.instIOComputationModel {α' α β β' : Type*}
     {fin : α' → α} {fout : Option β → Option β'} {τ : Type*} [IOComputationModel τ α β] :
     IOComputationModel (WithIOEncoding τ α' β' fin fout) α' β' where
   label t := label t.t
@@ -78,11 +78,11 @@ View the computation model `τ` as taking two list inputs (formally one input of
 by encoding the two inputs using `List.combine`.
 See `WithTwoInputs.instIOComputationModel` for the corresponding instance.
 -/
-abbrev WithTwoInputs {Γ β : Type} (τ : Type*) [IOComputationModel τ (List (Option Γ)) β] :=
+abbrev WithTwoInputs {Γ β : Type*} (τ : Type*) [IOComputationModel τ (List (Option Γ)) β] :=
   WithIOEncoding τ (List Γ × List Γ) β (Function.uncurry List.combine) id
 
 -- This instance can now be derived automatically
-example {Γ Γ' : Type} {τ : Type*} [IOComputationModel τ (List (Option Γ)) Γ'] :
+example {Γ Γ' : Type*} {τ : Type*} [IOComputationModel τ (List (Option Γ)) Γ'] :
     IOComputationModel (WithTwoInputs τ) (List Γ × List Γ) Γ' := by
   infer_instance
 
@@ -90,11 +90,11 @@ example {Γ Γ' : Type} {τ : Type*} [IOComputationModel τ (List (Option Γ)) �
 View the computation model `τ` as an acceptor by leveraging the distinguished accept and
 reject elements on its output type.
 -/
-abbrev AsAcceptor' {α β : Type} (τ : Type*) [IOComputationModel τ α β] [DenoteAcceptance β] :=
-  WithIOEncoding τ α Bool id (· >>= DenoteAcceptance.toBool)
+abbrev AsAcceptor' {α β : Type*} (τ : Type*) [IOComputationModel τ α β] [DenoteAcceptance β] :=
+  WithIOEncoding τ α Bool id (·.bind DenoteAcceptance.toBool)
 
 -- This instance can now be derived automatically
-example {α β : Type} {τ : Type*} [IOComputationModel τ α β] [DenoteAcceptance β] :
+example {α β : Type*} {τ : Type*} [IOComputationModel τ α β] [DenoteAcceptance β] :
     AcceptingCM (AsAcceptor' τ) α := by
   infer_instance
 
@@ -104,20 +104,20 @@ section SumType
 /--
 Retract of `List.map Sum.inr : List B → List (A ⊕ B)` on its image, `none` otherwise.
 -/
-def extractSnd {A B : Type} (xs : List (A ⊕ B)) : Option (List B) :=
+def extractSnd {A B : Type*} (xs : List (A ⊕ B)) : Option (List B) :=
   xs.mapM fun
     | .inl _ => none
     | .inr b => some b
 
 /-- `extractSnd` is a retract. -/
-lemma inr_extractSnd_apply {A B : Type} (xs : List B) :
+lemma inr_extractSnd_apply {A B : Type*} (xs : List B) :
     extractSnd (A := A) (List.map Sum.inr xs) = xs := by
   induction xs with
   | nil => simp [extractSnd]
   | cons xs x ih => grind [extractSnd]
 
 /-- `extractSnd` is an isomorphism on -/
-lemma Sum_inr_of_extractSnd {A B : Type} (xs : List (A ⊕ B)) (ys : List B) :
+lemma Sum_inr_of_extractSnd {A B : Type*} (xs : List (A ⊕ B)) (ys : List B) :
     extractSnd xs = some ys → xs = List.map Sum.inr ys := by
   intro h
   induction xs generalizing ys with
@@ -135,11 +135,12 @@ lemma Sum_inr_of_extractSnd {A B : Type} (xs : List (A ⊕ B)) (ys : List B) :
 Turn a ListTransitionSystem on a sum type into a ListTransitionSystem between the
 individual types.
 -/
-abbrev WithSplitSum {Γ Γ' : Type} (τ : Type*) [ListCM τ (Γ ⊕ Γ') (Γ ⊕ Γ')] :=
-  WithIOEncoding τ (List Γ) (List Γ') (List.map Sum.inl) (· >>= extractSnd)
+abbrev WithSplitSum {Γ Γ' : Type*} (τ : Type*) [ListCM τ (Γ ⊕ Γ') (Γ ⊕ Γ')] :=
+  WithIOEncoding (α := List (Γ ⊕ Γ')) (β := List (Γ ⊕ Γ')) τ (List Γ) (List Γ')
+    (List.map Sum.inl) (fun out => out.elim none extractSnd)
 
 -- This instance can now be derived automatically
-example {Γ Γ' : Type} (τ : Type*) [ListCM τ (Γ ⊕ Γ') (Γ ⊕ Γ')] :
+example {Γ Γ' : Type*} (τ : Type*) [ListCM τ (Γ ⊕ Γ') (Γ ⊕ Γ')] :
     ListCM (WithSplitSum τ) Γ Γ' := by
   infer_instance
 

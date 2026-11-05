@@ -21,7 +21,7 @@ public import Cslib.Computability.Machines.Turing.MultiTape.Nondeterministic
 
 namespace Turing
 
-variable {State : Type*} {Symbol : Type} {k n : ℕ} (ntm : MultiTapeNTM k Symbol State)
+variable {State : Type*} {Symbol : Type*} {k n : ℕ} (ntm : MultiTapeNTM k Symbol State)
 
 namespace MultiTapeNTM
 

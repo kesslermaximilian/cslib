@@ -33,20 +33,20 @@ A computer is deterministic if for every given state, there is at most one possi
 Additionally, we require that there is no stuck states, i.e. every non-halted state has a
 transition.
 -/
-class ProgressComputer {τ : Type u} {α β : Type} [IOComputationModel τ α β] (t : τ) where
+class ProgressComputer {τ : Type u} {α β : Type*} [IOComputationModel τ α β] (t : τ) where
   exits_of_nHalted ⦃l a⦄ : ¬ Halted t a → ∃ b, (lts t l).UnlabelledTr a b
 
 /-- A computaton model is deterministic if all its computers are deterministic. -/
-class ProgressCM (τ : Type u) {α β : Type} [IOComputationModel τ α β] where
+class ProgressCM (τ : Type u) {α β : Type*} [IOComputationModel τ α β] where
   progress (t : τ) : ProgressComputer t
 
 
-instance (τ : Type u) {α β : Type} [IOComputationModel τ α β] [ProgressCM τ] (t : τ) :
+instance (τ : Type u) {α β : Type*} [IOComputationModel τ α β] [ProgressCM τ] (t : τ) :
     ProgressComputer t := ProgressCM.progress t
 
 --namespace IOComputationModel
 
-variable {τ : Type*} {α β : Type} [IOComputationModel τ α β]
+variable {τ : Type*} {α β : Type*} [IOComputationModel τ α β]
 variable {t : τ} {l : α} {c : cfg t l} [ProgressComputer t]
 
 theorem Halted_of_Terminal (h : Terminal t c) : Halted t c := by

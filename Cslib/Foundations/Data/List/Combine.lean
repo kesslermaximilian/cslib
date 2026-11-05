@@ -12,7 +12,7 @@ public import Cslib.Init
 
 @[expose] public section
 
-variable {Γ : Type} (fst snd fst' snd' : List Γ)
+variable {Γ : Type*} (fst snd fst' snd' : List Γ)
 
 /--
 Combine two lists by embedding them into an alphabet with a separator.

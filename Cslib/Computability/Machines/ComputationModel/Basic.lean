@@ -74,7 +74,7 @@ This way, we can think of elements of `τ` as allowing computations `α → β` 
 the computation context, following labelled transitions and taking output from this computation
 context.
 -/
-class IOComputationModel (τ : Type u) (α β : outParam Type)
+class IOComputationModel (τ : Type u) (α β : outParam Type*)
     where
   /-- Configuration type (or state type) associated with a computer -/
   cfg (t : τ) (a : α) : Type v
@@ -100,22 +100,22 @@ class SpaceSize (τ : Type u) [IOComputationModel τ α β] where
 -- Configuration and label universes are independent and occur together in these aliases.
 set_option linter.checkUnivs false in
 /-- An `IOComputationModel` between `List Γᵢ` and `List Γₒ`. -/
-abbrev ListCM (τ : Type*) (Γᵢ Γₒ : Type) := IOComputationModel τ (List Γᵢ) (List Γₒ)
+abbrev ListCM (τ : Type*) (Γᵢ Γₒ : Type*) := IOComputationModel τ (List Γᵢ) (List Γₒ)
 
 set_option linter.checkUnivs false in
 /-- An `IOComputationModel` between `α` and `Bool`.
 `true` and `false` denote acceptance and rejection. -/
-abbrev AcceptingCM (τ : Type*) (α : Type) := IOComputationModel τ α Bool
+abbrev AcceptingCM (τ : Type*) (α : Type*) := IOComputationModel τ α Bool
 
 set_option linter.checkUnivs false in
 /-- An `IOComputationModel` between `List Γ` and `Bool`.
 `true` and `false` denote acceptance and rejection. -/
-abbrev ListAcceptingCM (τ : Type*) (Γ : Type) := IOComputationModel τ (List Γ) Bool
+abbrev ListAcceptingCM (τ : Type*) (Γ : Type*) := IOComputationModel τ (List Γ) Bool
 
 namespace ComputationModel
 open IOComputationModel
 
-variable {τ : Type u} {α β : Type} [IOComputationModel τ α β]
+variable {τ : Type u} {α β : Type*} [IOComputationModel τ α β]
 
 section Step
 

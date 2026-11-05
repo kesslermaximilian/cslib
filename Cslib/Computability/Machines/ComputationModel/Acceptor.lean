@@ -23,7 +23,7 @@ Typeclass synthesis to allow viewing an `AcceptingCM`
 namespace Cslib.ComputationModel
 
 /-- An accepting system with word inputs is an automata acceptor. -/
-instance {τ : Type*} {Γ : Type} [AcceptingCM τ (List Γ)] :
+instance {τ : Type*} {Γ : Type*} [AcceptingCM τ (List Γ)] :
     Cslib.Automata.Acceptor τ Γ where
   Accepts t l := ComputationModel.Accepts t l
 

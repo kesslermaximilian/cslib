@@ -24,16 +24,16 @@ public import Cslib.Computability.Automata.Acceptors.Acceptor
 namespace Cslib.ComputationModel
 
 /- Means that there is a reasonable notion of "size" on input / output. -/
-class CompSize (Γ : Type) where
+class CompSize (Γ : Type*) where
   compSize : Γ → ℕ
 
-instance (Γ : Type) [CompSize Γ] : CompSize (Option Γ) where
+instance (Γ : Type*) [CompSize Γ] : CompSize (Option Γ) where
   compSize x := if h : x.isSome then 1 + CompSize.compSize (x.get h) else 1
 
-instance (Γ : Type) : CompSize (List Γ) where
+instance (Γ : Type*) : CompSize (List Γ) where
   compSize l := l.length
 
-instance (Γ : Type) : CompSize (List Γ × List Γ) where
+instance (Γ : Type*) : CompSize (List Γ × List Γ) where
   compSize p := p.fst.length + p.snd.length + 1
 
 instance : CompSize Unit where
