@@ -64,6 +64,22 @@ model that acts as an acceptor/rejector of strings.
 
 @[expose] public section
 
+
+namespace RelSeries
+open scoped SetRel
+set_option backward.isDefEq.respectTransparency false in
+
+-- In mathlib, there is `RelSeries.head_fromListIsChain`, but not `RelSeries.last_FromListIsChain`
+@[simp]
+lemma tail_fromListIsChain {α : Type*} {r : SetRel α α} (l : List α) (l_ne_nil : l ≠ [])
+  (hl : l.IsChain (· ~[r] ·)) :
+    (fromListIsChain l l_ne_nil hl).last = l.getLast l_ne_nil := by
+  simp [← apply_last, List.getElem_length_sub_one_eq_getLast]
+
+end RelSeries
+
+
+
 namespace Cslib
 
 open ComputationModel.CompSize
@@ -119,6 +135,10 @@ variable {τ : Type u} {α β : Type*} [IOComputationModel τ α β]
 
 section Step
 
+/-- The unlabelled version of the LTS, as a relation on configurations. -/
+def runStep (t : τ) {l : α} (c c' : cfg t l) : Prop :=
+  (lts t l).UnlabelledTr c c'
+
 /--
 A configuration is `Terminal` if it is terminal in the LTS of its machine, i.e. there is no
 possible transition from this state.
@@ -127,22 +147,22 @@ def Terminal (t : τ) {l : α} (c : cfg t l) : Prop :=
   (lts t l).IsTerminal c
 
 lemma Terminal_iff {t : τ} {l : α} {c : cfg t l} :
-    Terminal t c ↔ ∀ c', ¬ (lts t l).UnlabelledTr c c' := by
-  simp [Terminal, LTS.IsTerminal.iff_UnlabelledTr]
+    Terminal t c ↔ ∀ c', ¬ runStep t c c' := by
+  simp [Terminal, LTS.IsTerminal.iff_UnlabelledTr, runStep]
 
-alias ⟨Terminal.not_UnlabelledTr, Terminal.of_not_UnlabelledTr⟩
+alias ⟨Terminal.not_runStep, Terminal.of_not_runStep⟩
   := Terminal_iff
 
+attribute [grind .] Terminal.not_runStep
+attribute [grind .] Terminal.of_not_runStep
+
+@[grind .]
 lemma Terminal_of_Halted {t : τ} {a : α} {c : cfg t a} : Halted t c → Terminal t c :=
   _Terminal_of_Halted
 
 /-- A state is stuck if it is terminal but not halted -/
 def Stuck (t : τ) {l : α} (c : cfg t l) : Prop :=
   Terminal t c ∧ ¬ Halted t c
-
-/-- The unlabelled version of the LTS, as a relation on configurations. -/
-def runStep (t : τ) {l : α} (c c' : cfg t l) : Prop :=
-  (lts t l).UnlabelledTr c c'
 
 /-- The one-step relation on configurations. A halted configuration steps only to itself.
 A running configuration steps by using any label of the LTS. -/
@@ -152,46 +172,38 @@ def Step (t : τ) {l : α} (c c' : cfg t l) : Prop :=
 /-- A halted configuration steps only to itself. -/
 lemma Step_of_Halted {t : τ} {l : α} {c c' : cfg t l} (h : Halted t c) :
     Step t c c' ↔ c' = c := by
-  simp [Step, h, eq_comm, runStep, (Terminal_of_Halted h).not_UnlabelledTr]
+  simp [Step, h, eq_comm, (Terminal_of_Halted h).not_runStep]
 
 /-- A non-halted configuration steps using the `UnlabelledTr` of the LTS. -/
 lemma Step_of_nHalted {t : τ} {l : α} {c c' : cfg t l} (h : ¬ Halted t c) :
     Step t c c' ↔ (lts t l).UnlabelledTr c c' := by
   simp [Step, h, runStep]
 
-/-- The one-step relation on configurations for `input`, as a set of pairs. -/
+/-- The one-step (loop-extended) relation on configurations for `input`, as a set of pairs. -/
 abbrev stepRel (t : τ) (l : α) : SetRel (cfg t l) (cfg t l) :=
   {(c, c') | Step t c c'}
 
-/-- The one-step relation on configurations for `input`, as a set of pairs. -/
-abbrev runningStepRel (t : τ) (l : α) : SetRel (cfg t l) (cfg t l) :=
-  {(c, c') | ¬ Halted t c ∧ Step t c c'}
-
 -- TODO: This is maybe the more "canonical" definition in the abstract framework?
 /-- The one-step relation on configurations for `input`, as a set of pairs. -/
-abbrev runningStepRel' (t : τ) (l : α) : SetRel (cfg t l) (cfg t l) :=
-  {(c, c') | (lts t l).UnlabelledTr c c'}
+abbrev runningStepRel (t : τ) (l : α) : SetRel (cfg t l) (cfg t l) :=
+  { (c, c') | runStep t c c' }
 
-example (t : τ) (l : α) :
-    runningStepRel t l = runningStepRel' t l := by
-  rw [runningStepRel, runningStepRel']
-  simp only [Step, Set.ofPred.injEq]
-  funext x
-  rw [eq_iff_iff]
-  constructor
-  · grind [runStep]
-  · intro h
-    simp only [runStep, h, true_or, and_true]
-    intro hh
-    exact (Terminal_of_Halted hh).not_UnlabelledTr _ h
+--@[simp]
+lemma runningStepRel.mem_iff_runStep (t : τ) {l : α} {c c' : cfg t l} :
+    runStep t c c' ↔ (c, c') ∈ runningStepRel t l := by
+  rfl
+
+lemma runningStepRel.mem_iff_nHalted_and_step (t : τ) {l : α} {c c' : cfg t l} :
+    ¬ Halted t c ∧ Step t c c' ↔ (c, c') ∈ runningStepRel t l := by
+  rw [← runningStepRel.mem_iff_runStep, Step]
+  grind
+
 
 end Step
 
 section Runs
 variable (t : τ) (l : α) (c : cfg t l) (n s : ℕ)
 
-/-- A nonempty list of configurations joined by steps of `t`. -/
-abbrev RunPath (t : τ) (l : α) := RelSeries (stepRel t l)
 
 /-- A valid execution sequence in the configuraiton space of this machine with input `l`. -/
 structure Run where
@@ -510,6 +522,27 @@ theorem HaltsFromInTimeAndSpace.mayHaltFromInTimeSpace [SpaceSize τ] {t : τ} {
 
 
 end Halting
+
+section RunPaths
+
+variable (t : τ) {l : α}
+
+/-- A nonempty list of configurations joined by steps of `t`. -/
+abbrev RunPath (t : τ) (l : α) := RelSeries (stepRel t l)
+
+/-- A nonempty list of configurations joined by steps of `t`. -/
+abbrev RunningStepPath (t : τ) (l : α) := RelSeries (runningStepRel t l)
+
+/-- A labelled execution gives a path of actual transitions with the same endpoints and length. -/
+lemma exists_runningPath_of_mTr {a b : cfg t l} {μs : List (label t)}
+    (h : (lts t l).MTr a μs b) :
+    ∃ p : RunningStepPath t l, p.head = a ∧ p.last = b ∧ p.length = μs.length := by
+  obtain ⟨ss, he⟩ := LTS.mTr_iff_execution.mp h
+  have : List.IsChain (fun a b => (a, b) ∈ runningStepRel t l) ss := he.isChain
+  use RelSeries.fromListIsChain ss (LTS.Execution.ss_ne_nil he) this
+  simp [LTS.Execution.head he, LTS.Execution.length he, LTS.Execution.getLast he]
+
+end RunPaths
 
 end ComputationModel
 
